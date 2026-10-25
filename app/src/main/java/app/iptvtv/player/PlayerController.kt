@@ -60,11 +60,13 @@ class PlayerController(context: Context) {
 
     // Gdy serwer nie podaje rozszerzenia ani poprawnego Content-Type, ExoPlayer nie rozpozna
     // formatu (PARSING_CONTAINER_UNSUPPORTED). Próbujemy kolejno: auto -> HLS -> MPEG-TS -> MPEG-PS.
+    // Uwaga: "video/mp2p" to ciąg dla MPEG-PS — używamy go bezpośrednio, bo MimeTypes.VIDEO_PS
+    // w Media3 1.5.1 bywa niedostępne / wymaga @UnstableApi i wywala kompilację.
     private val mimes = listOf<String?>(
         null,
         MimeTypes.APPLICATION_M3U8,
         MimeTypes.VIDEO_MP2T,
-        MimeTypes.VIDEO_PS,
+        "video/mp2p",
     )
     private var attempt = 0
     private val learned = HashMap<String, Int>()   // url -> indeks działającej próby
