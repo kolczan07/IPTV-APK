@@ -47,8 +47,8 @@ class PlayerController(context: Context) {
         autoExtractors
     ).setDataSourceFactory(http)
 
-    // Tryb PS: jeden wymuszony extractor = brak rozpoznawania formatu, więc żadnego
-    // ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED z błędnego "zgadnięcia".
+    // Tryb PS: jeden wymuszony extractor (ExoPlayer pomija wtedy rozpoznawanie formatu).
+    // Używany dopiero po nieudanym AUTO, bo przy strumieniu innym niż PS nie zgłasza błędu.
     private val psSourceFactory = ProgressiveMediaSource.Factory(
         http,
         ExtractorsFactory { arrayOf<Extractor>(PsExtractor()) }
@@ -74,16 +74,12 @@ class PlayerController(context: Context) {
     private var attempt = AUTO
     private val tried = mutableSetOf<Int>()        // próby użyte dla bieżącego kanału
     private var firstError: String? = null         // kod błędu z pierwszej próby
-    private val learned = HashMap<String, Int>()   // url -> próba, która zadziałała
+    private val learned = HashMap<String, Int>()   // url -> tryb, który zadziałał
 
-    /** Adres bez rozszerzenia = MPEG-PS (serwery Enigma2 itp.). */
+    /** Zawsze zaczynamy od AUTO (jak wcześniej), tylko .m3u8 od razu jako HLS. */
     private fun initialAttempt(url: String): Int {
         val path = url.substringBefore('?').lowercase()
-        return when {
-            path.endsWith(".m3u8") -> HLS
-            path.endsWith(".ts") || path.endsWith(".mp4") || path.endsWith(".mkv") -> AUTO
-            else -> PS
-        }
+        return if (path.endsWith(".m3u8")) HLS else AUTO
     }
 
     init {
@@ -93,7 +89,7 @@ class PlayerController(context: Context) {
                 if (firstError == null) firstError = e.errorCodeName
                 // 3001..3004 = błędy parsowania kontenera / manifestu
                 if (url != null && e.errorCode in 3001..3004) {
-                    val next = listOf(AUTO, HLS, PS).firstOrNull { it !in tried }
+                    val next = listOf(AUTO, PS, HLS).firstOrNull { it !in tried }
                     if (next != null) {
                         load(url, next)
                         return
