@@ -12,6 +12,8 @@ import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.extractor.DefaultExtractorsFactory
+import androidx.media3.extractor.ts.TsExtractor
 import app.iptvtv.data.ChannelEntity
 
 /**
@@ -27,8 +29,20 @@ class PlayerController(context: Context) {
         .setConnectTimeoutMs(10_000)
         .setReadTimeoutMs(15_000)
 
+    // Flagi dla strumieni TS/PS bez AUD i bez IDR — inaczej obraz staje, a dźwięk leci.
+    private val extractorsFactory = DefaultExtractorsFactory()
+        .setTsExtractorFlags(
+            TsExtractor.FLAG_DETECT_ACCESS_UNITS or TsExtractor.FLAG_ALLOW_NON_IDR_KEYFRAMES
+        )
+
+    // Wspólna fabryka źródeł: http + extractorsFactory.
+    private val mediaSourceFactory = DefaultMediaSourceFactory(
+        context.applicationContext,
+        extractorsFactory
+    ).setDataSourceFactory(http)
+
     val player: ExoPlayer = ExoPlayer.Builder(context.applicationContext)
-        .setMediaSourceFactory(DefaultMediaSourceFactory(context.applicationContext).setDataSourceFactory(http))
+        .setMediaSourceFactory(mediaSourceFactory)
         .setLoadControl(
             DefaultLoadControl.Builder()
                 // krótki bufor startowy = szybki zapping na live
@@ -45,21 +59,26 @@ class PlayerController(context: Context) {
         private set
 
     // Gdy serwer nie podaje rozszerzenia ani poprawnego Content-Type, ExoPlayer nie rozpozna
-    // formatu (PARSING_CONTAINER_UNSUPPORTED). Próbujemy kolejno: auto -> HLS -> MPEG-TS.
-    private val mimes = listOf<String?>(null, MimeTypes.APPLICATION_M3U8, MimeTypes.VIDEO_MP2T, MimeTypes.VIDEO_PS)
-private var attempt = 0
-private val learned = HashMap<String, Int>()
+    // formatu (PARSING_CONTAINER_UNSUPPORTED). Próbujemy kolejno: auto -> HLS -> MPEG-TS -> MPEG-PS.
+    private val mimes = listOf<String?>(
+        null,
+        MimeTypes.APPLICATION_M3U8,
+        MimeTypes.VIDEO_MP2T,
+        MimeTypes.VIDEO_PS,
+    )
+    private var attempt = 0
+    private val learned = HashMap<String, Int>()   // url -> indeks działającej próby
 
-/** Dla adresów bez rozszerzenia zakładamy MPEG-TS (serwery Enigma2 itp.). */
-private fun initialAttempt(url: String): Int {
-    val lower = url.lowercase()
-    return when {
-        lower.contains(".m3u8") -> 1  // HLS
-        lower.contains(".ts")   -> 2  // TS
-        lower.contains(".mp4")  -> 0  // auto
-        else                    -> 3  // brak rozszerzenia → TS
+    /** Dla adresów bez rozszerzenia zakładamy MPEG-PS (serwery Enigma2 itp.). */
+    private fun initialAttempt(url: String): Int {
+        val lower = url.lowercase()
+        return when {
+            lower.contains(".m3u8") -> 1  // HLS
+            lower.contains(".ts")   -> 2  // MPEG-TS
+            lower.contains(".mp4")  -> 0  // auto
+            else                    -> 3  // brak rozszerzenia → MPEG-PS
+        }
     }
-}
 
     init {
         player.addListener(object : Player.Listener {
@@ -94,7 +113,7 @@ private fun initialAttempt(url: String): Int {
             return
         }
         error = null
-            load(ch.url, learned[ch.url] ?: initialAttempt(ch.url))
+        load(ch.url, learned[ch.url] ?: initialAttempt(ch.url))
     }
 
     fun pause() { player.playWhenReady = false }
