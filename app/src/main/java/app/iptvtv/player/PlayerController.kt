@@ -8,12 +8,17 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import androidx.media3.extractor.DefaultExtractorsFactory
-import androidx.media3.extractor.ts.TsExtractor
+import androidx.media3.extractor.Extractor
+import androidx.media3.extractor.ExtractorsFactory
+import androidx.media3.extractor.ts.DefaultTsPayloadReaderFactory
+import androidx.media3.extractor.ts.PsExtractor
 import app.iptvtv.data.ChannelEntity
 
 /**
@@ -21,6 +26,7 @@ import app.iptvtv.data.ChannelEntity
  * Przejście lista → pełny ekran tylko podpina inny PlayerView do tego samego playera,
  * więc strumień nie jest ładowany od nowa.
  */
+@OptIn(UnstableApi::class)
 class PlayerController(context: Context) {
     // Wiele paneli IPTV blokuje domyślnego "ExoPlayer" UA albo przekierowuje http -> https.
     private val http = DefaultHttpDataSource.Factory()
@@ -29,20 +35,27 @@ class PlayerController(context: Context) {
         .setConnectTimeoutMs(10_000)
         .setReadTimeoutMs(15_000)
 
-    // Flagi dla strumieni TS/PS bez AUD i bez IDR — inaczej obraz staje, a dźwięk leci.
-    private val extractorsFactory = DefaultExtractorsFactory()
+    // Tryb AUTO: ExoPlayer sam rozpoznaje kontener (+ flagi dla TS bez AUD/IDR).
+    private val autoExtractors = DefaultExtractorsFactory()
         .setTsExtractorFlags(
-            TsExtractor.FLAG_DETECT_ACCESS_UNITS or TsExtractor.FLAG_ALLOW_NON_IDR_KEYFRAMES
+            DefaultTsPayloadReaderFactory.FLAG_DETECT_ACCESS_UNITS or
+                DefaultTsPayloadReaderFactory.FLAG_ALLOW_NON_IDR_KEYFRAMES
         )
 
-    // Wspólna fabryka źródeł: http + extractorsFactory.
-    private val mediaSourceFactory = DefaultMediaSourceFactory(
+    private val autoSourceFactory = DefaultMediaSourceFactory(
         context.applicationContext,
-        extractorsFactory
+        autoExtractors
     ).setDataSourceFactory(http)
 
+    // Tryb PS: jeden wymuszony extractor = brak rozpoznawania formatu, więc żadnego
+    // ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED z błędnego "zgadnięcia".
+    private val psSourceFactory = ProgressiveMediaSource.Factory(
+        http,
+        ExtractorsFactory { arrayOf<Extractor>(PsExtractor()) }
+    )
+
     val player: ExoPlayer = ExoPlayer.Builder(context.applicationContext)
-        .setMediaSourceFactory(mediaSourceFactory)
+        .setMediaSourceFactory(autoSourceFactory)
         .setLoadControl(
             DefaultLoadControl.Builder()
                 // krótki bufor startowy = szybki zapping na live
@@ -58,27 +71,18 @@ class PlayerController(context: Context) {
     var error by mutableStateOf<String?>(null)
         private set
 
-    // Gdy serwer nie podaje rozszerzenia ani poprawnego Content-Type, ExoPlayer nie rozpozna
-    // formatu (PARSING_CONTAINER_UNSUPPORTED). Próbujemy kolejno: auto -> HLS -> MPEG-TS -> MPEG-PS.
-    // Uwaga: "video/mp2p" to ciąg dla MPEG-PS — używamy go bezpośrednio, bo MimeTypes.VIDEO_PS
-    // w Media3 1.5.1 bywa niedostępne / wymaga @UnstableApi i wywala kompilację.
-    private val mimes = listOf<String?>(
-        null,
-        MimeTypes.APPLICATION_M3U8,
-        MimeTypes.VIDEO_MP2T,
-        "video/mp2p",
-    )
-    private var attempt = 0
-    private val learned = HashMap<String, Int>()   // url -> indeks działającej próby
+    private var attempt = AUTO
+    private val tried = mutableSetOf<Int>()        // próby użyte dla bieżącego kanału
+    private var firstError: String? = null         // kod błędu z pierwszej próby
+    private val learned = HashMap<String, Int>()   // url -> próba, która zadziałała
 
-    /** Dla adresów bez rozszerzenia zakładamy MPEG-PS (serwery Enigma2 itp.). */
+    /** Adres bez rozszerzenia = MPEG-PS (serwery Enigma2 itp.). */
     private fun initialAttempt(url: String): Int {
-        val lower = url.lowercase()
+        val path = url.substringBefore('?').lowercase()
         return when {
-            lower.contains(".m3u8") -> 1  // HLS
-            lower.contains(".ts")   -> 2  // MPEG-TS
-            lower.contains(".mp4")  -> 0  // auto
-            else                    -> 3  // brak rozszerzenia → MPEG-PS
+            path.endsWith(".m3u8") -> HLS
+            path.endsWith(".ts") || path.endsWith(".mp4") || path.endsWith(".mkv") -> AUTO
+            else -> PS
         }
     }
 
@@ -86,11 +90,16 @@ class PlayerController(context: Context) {
         player.addListener(object : Player.Listener {
             override fun onPlayerError(e: PlaybackException) {
                 val url = current?.url
-                if (url != null && e.errorCode in 3001..3004 && attempt < mimes.size - 1) {
-                    load(url, attempt + 1)
-                    return
+                if (firstError == null) firstError = e.errorCodeName
+                // 3001..3004 = błędy parsowania kontenera / manifestu
+                if (url != null && e.errorCode in 3001..3004) {
+                    val next = listOf(AUTO, HLS, PS).firstOrNull { it !in tried }
+                    if (next != null) {
+                        load(url, next)
+                        return
+                    }
                 }
-                error = "Błąd odtwarzania (${e.errorCodeName})"
+                error = "Błąd odtwarzania ($firstError; próby: ${tried.sorted()}; ostatni: ${e.errorCodeName})"
             }
 
             override fun onPlaybackStateChanged(state: Int) {
@@ -99,10 +108,16 @@ class PlayerController(context: Context) {
         })
     }
 
-    private fun load(url: String, idx: Int) {
-        attempt = idx
-        val item = MediaItem.Builder().setUri(url).apply { mimes[idx]?.let { setMimeType(it) } }.build()
-        player.setMediaItem(item)
+    private fun load(url: String, mode: Int) {
+        attempt = mode
+        tried += mode
+        when (mode) {
+            PS -> player.setMediaSource(psSourceFactory.createMediaSource(MediaItem.fromUri(url)))
+            HLS -> player.setMediaItem(
+                MediaItem.Builder().setUri(url).setMimeType(MimeTypes.APPLICATION_M3U8).build()
+            )
+            else -> player.setMediaItem(MediaItem.fromUri(url))
+        }
         player.prepare()
         player.playWhenReady = true
     }
@@ -115,6 +130,8 @@ class PlayerController(context: Context) {
             return
         }
         error = null
+        firstError = null
+        tried.clear()
         load(ch.url, learned[ch.url] ?: initialAttempt(ch.url))
     }
 
@@ -129,4 +146,10 @@ class PlayerController(context: Context) {
     }
 
     fun release() = player.release()
+
+    private companion object {
+        const val AUTO = 0
+        const val HLS = 1
+        const val PS = 2
+    }
 }
