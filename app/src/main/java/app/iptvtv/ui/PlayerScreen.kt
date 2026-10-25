@@ -101,7 +101,8 @@ fun PlayerScreen(
                         Text(
                             "${clock(cur.start)}–${clock(cur.stop)}  ${cur.title}",
                             style = MaterialTheme.typography.titleMedium,
-                        )
+                            color = Color.White,
+                       )
                         ProgressLine(progressOf(cur, epg.now), Modifier.padding(vertical = 6.dp))
                         cur.description?.let {
                             Text(it, maxLines = 2, style = MaterialTheme.typography.bodySmall,
