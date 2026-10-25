@@ -47,8 +47,19 @@ class PlayerController(context: Context) {
     // Gdy serwer nie podaje rozszerzenia ani poprawnego Content-Type, ExoPlayer nie rozpozna
     // formatu (PARSING_CONTAINER_UNSUPPORTED). Próbujemy kolejno: auto -> HLS -> MPEG-TS.
     private val mimes = listOf<String?>(null, MimeTypes.APPLICATION_M3U8, MimeTypes.VIDEO_MP2T)
-    private var attempt = 0
-    private val learned = HashMap<String, Int>()   // url -> indeks działającej próby
+private var attempt = 0
+private val learned = HashMap<String, Int>()
+
+/** Dla adresów bez rozszerzenia zakładamy MPEG-TS (serwery Enigma2 itp.). */
+private fun initialAttempt(url: String): Int {
+    val lower = url.lowercase()
+    return when {
+        lower.contains(".m3u8") -> 1  // HLS
+        lower.contains(".ts")   -> 2  // TS
+        lower.contains(".mp4")  -> 0  // auto
+        else                    -> 2  // brak rozszerzenia → TS
+    }
+}
 
     init {
         player.addListener(object : Player.Listener {
@@ -83,7 +94,7 @@ class PlayerController(context: Context) {
             return
         }
         error = null
-        load(ch.url, learned[ch.url] ?: 0)
+            load(ch.url, learned[ch.url] ?: initialAttempt(ch.url))
     }
 
     fun pause() { player.playWhenReady = false }
