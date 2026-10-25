@@ -87,7 +87,7 @@ fun ChannelListScreen(
     var focusedCh by remember { mutableStateOf<ChannelEntity?>(null) }
     LaunchedEffect(focusedCh?.url) {
         val c = focusedCh ?: return@LaunchedEffect
-        delay(450)
+        delay(1000)
         onPreview(c)
     }
 
