@@ -109,14 +109,9 @@ fun ChannelListScreen(
                 }
             }
             Spacer(Modifier.height(8.dp))
-            Text(status, style = MaterialTheme.typography.bodySmall, maxLines = 3,
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Spacer(Modifier.height(6.dp))
-            Button(onClick = { onGuide(shown) }, modifier = Modifier.fillMaxWidth()) { Text("Przewodnik EPG") }
-            Spacer(Modifier.height(6.dp))
-            Button(onClick = onRefresh, enabled = !loading, modifier = Modifier.fillMaxWidth()) { Text("Odśwież") }
-            Spacer(Modifier.height(6.dp))
-            Button(onClick = onSettings, modifier = Modifier.fillMaxWidth()) { Text("Ustawienia") }
+Button(onClick = { onGuide(shown) }, modifier = Modifier.fillMaxWidth()) { Text("Przewodnik EPG") }
+Spacer(Modifier.height(6.dp))
+Button(onClick = onSettings, modifier = Modifier.fillMaxWidth()) { Text("Ustawienia") }
         }
 
         Spacer(Modifier.width(20.dp))
@@ -178,7 +173,8 @@ private fun PreviewPane(controller: PlayerController, ch: ChannelEntity?, epg: E
         }
         Spacer(Modifier.height(12.dp))
         if (ch != null) {
-            Text(ch.name, maxLines = 2, style = MaterialTheme.typography.titleLarge)
+            Text(ch.name, maxLines = 2, style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onSurface)
             val (cur, next) = epg.nowNext(ch)
             if (cur != null) {
                 Spacer(Modifier.height(6.dp))
@@ -225,6 +221,7 @@ private fun ChannelRow(
                         Text("${ch.number}  ", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     Text(ch.name, maxLines = 1, style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.weight(1f, fill = false))
                 }
                 if (cur != null) {
