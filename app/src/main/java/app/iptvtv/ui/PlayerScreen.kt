@@ -94,6 +94,7 @@ fun PlayerScreen(
                     Text(
                         listOfNotNull(channel.number?.toString(), channel.name).joinToString("  "),
                         style = MaterialTheme.typography.headlineSmall,
+                        color = Color.White,
                     )
                     val (cur, next) = epg.nowNext(channel)
                     if (cur != null) {
