@@ -22,7 +22,7 @@ import app.iptvtv.data.ChannelEntity
 class PlayerController(context: Context) {
     // Wiele paneli IPTV blokuje domyślnego "ExoPlayer" UA albo przekierowuje http -> https.
     private val http = DefaultHttpDataSource.Factory()
-        .setUserAgent("VLC/3.0.20 LibVLC/3.0.20")
+        .setUserAgent("Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36")
         .setAllowCrossProtocolRedirects(true)
         .setConnectTimeoutMs(10_000)
         .setReadTimeoutMs(15_000)
@@ -57,7 +57,7 @@ private fun initialAttempt(url: String): Int {
         lower.contains(".m3u8") -> 1  // HLS
         lower.contains(".ts")   -> 2  // TS
         lower.contains(".mp4")  -> 0  // auto
-        else                    -> 2  // brak rozszerzenia → TS
+        else                    -> 1  // brak rozszerzenia → TS
     }
 }
 
