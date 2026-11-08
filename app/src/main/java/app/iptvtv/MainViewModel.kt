@@ -19,6 +19,8 @@ import kotlinx.coroutines.launch
 enum class Screen { Setup, List, Guide, Player }
 
 private const val EPG_TTL = 3 * 3_600_000L
+const val EPG_OFFSET_MAX_MIN = 12 * 60
+const val EPG_OFFSET_STEP_MIN = 30
 
 class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val db = AppDb.get(app)
@@ -35,6 +37,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val channels = repo.channels.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
     val m3uUrl = settings.m3uUrl.stateIn(viewModelScope, SharingStarted.Eagerly, "")
     val epgUrl = settings.epgUrl.stateIn(viewModelScope, SharingStarted.Eagerly, "")
+    val epgOffsetMin = settings.epgOffsetMin.stateIn(viewModelScope, SharingStarted.Eagerly, 0)
+
+    /** Zmienia korektę czasu EPG o [delta] minut (ograniczone do ±12 h). Działa od razu, bez pobierania EPG. */
+    fun adjustEpgOffset(delta: Int) {
+        val next = (epgOffsetMin.value + delta).coerceIn(-EPG_OFFSET_MAX_MIN, EPG_OFFSET_MAX_MIN)
+        viewModelScope.launch { settings.setEpgOffsetMin(next) }
+    }
+
+    private fun List<ProgrammeEntity>.shifted(offMs: Long): List<ProgrammeEntity> =
+        if (offMs == 0L) this else map { it.copy(start = it.start + offMs, stop = it.stop + offMs) }
 
     /** Ostatnio oglądane (najnowsze pierwsze). null = jeszcze nie wczytane z bazy. */
     val history: StateFlow<List<ChannelEntity>?> =
@@ -51,9 +63,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             delay(60_000)
         }
     }
-        .flatMapLatest { t ->
-            repo.epgWindow(t, t + 3 * 3_600_000L).map { list ->
-                EpgSnapshot(t, list.groupBy { it.channelKey })
+        .combine(epgOffsetMin) { t, off -> t to off * 60_000L }
+        .flatMapLatest { (t, off) ->
+            repo.epgWindow(t - off, t + 3 * 3_600_000L - off).map { list ->
+                EpgSnapshot(t, list.shifted(off).groupBy { it.channelKey })
             }
         }
         .flowOn(Dispatchers.Default)
@@ -67,8 +80,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             delay(300_000)
         }
     }
-        .flatMapLatest { t ->
-            repo.epgWindow(t - 3_600_000L, t + 10 * 3_600_000L).map { list -> list.groupBy { it.channelKey } }
+        .combine(epgOffsetMin) { t, off -> t to off * 60_000L }
+        .flatMapLatest { (t, off) ->
+            repo.epgWindow(t - 3_600_000L - off, t + 10 * 3_600_000L - off)
+                .map { list -> list.shifted(off).groupBy { it.channelKey } }
         }
         .flowOn(Dispatchers.Default)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())

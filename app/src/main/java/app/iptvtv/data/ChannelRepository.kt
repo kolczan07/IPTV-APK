@@ -13,6 +13,9 @@ import java.util.zip.GZIPInputStream
 
 private const val HOUR = 3_600_000L
 
+/** Zapas okna EPG na korektę czasu (maks. ±12 h, patrz EPG_OFFSET_MAX_MIN). */
+private const val OFFSET_MARGIN = 12 * HOUR
+
 class ChannelRepository(
     private val dao: ChannelDao,
     private val epg: EpgDao,
@@ -57,7 +60,7 @@ class ChannelRepository(
         parsed.size
     }
 
-    /** Pobiera XMLTV (także .gz) i zapisuje programy z okna -2 h … +36 h. Zwraca liczbę programów. */
+    /** Pobiera XMLTV (także .gz) i zapisuje programy z okna -14 h … +48 h (zapas na korektę czasu). Zwraca liczbę programów. */
     suspend fun refreshEpg(url: String): Int = withContext(Dispatchers.IO) {
         val now = System.currentTimeMillis()
         val request = requestFor(url)
@@ -69,7 +72,7 @@ class ChannelRepository(
             val b1 = raw.read()
             raw.reset()
             val stream = if (b0 == 0x1f && b1 == 0x8b) GZIPInputStream(raw) else raw
-            XmltvParser.parse(stream, from = now - 2 * HOUR, to = now + 36 * HOUR)
+            XmltvParser.parse(stream, from = now - 2 * HOUR - OFFSET_MARGIN, to = now + 36 * HOUR + OFFSET_MARGIN)
         }
         if (items.isEmpty()) throw IOException("brak programów w oknie czasowym")
         epg.replaceAll(items)

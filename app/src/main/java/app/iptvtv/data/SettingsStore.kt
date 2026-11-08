@@ -2,6 +2,7 @@ package app.iptvtv.data
 
 import android.content.Context
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -19,6 +20,11 @@ class SettingsStore(private val ctx: Context) {
     private val epgKey = stringPreferencesKey("epg_url")
 
     private val epgAtKey = longPreferencesKey("epg_fetched_at")
+    private val epgOffsetKey = intPreferencesKey("epg_offset_min")
+
+    /** Korekta czasu EPG w minutach (może być ujemna); stosowana przy odczycie, więc nie wymaga ponownego pobrania. */
+    val epgOffsetMin: Flow<Int> = ctx.dataStore.data.map { it[epgOffsetKey] ?: 0 }
+    suspend fun setEpgOffsetMin(min: Int) { ctx.dataStore.edit { it[epgOffsetKey] = min } }
 
     /** Kiedy ostatnio pobrano EPG (ms); 0 = nigdy. Pozwala nie ściągać wielkiego XML-a przy każdym starcie. */
     val epgFetchedAt: Flow<Long> = ctx.dataStore.data.map { it[epgAtKey] ?: 0L }

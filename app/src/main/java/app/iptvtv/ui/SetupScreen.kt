@@ -41,6 +41,8 @@ fun SetupScreen(
     updatesEnabled: Boolean,
     updateText: String,
     onCheckUpdate: () -> Unit,
+    epgOffsetMin: Int,
+    onEpgOffset: (Int) -> Unit,
     onSave: (String, String) -> Unit,
     onCancel: () -> Unit,
 ) {
@@ -54,6 +56,7 @@ fun SetupScreen(
             Section.Account -> AccountSection(
                 m3u = m3u, epg = epg,
                 onM3u = { m3u = it }, onEpg = { epg = it },
+                epgOffsetMin = epgOffsetMin, onEpgOffset = onEpgOffset,
                 onSave = { onSave(m3u, epg) },
             )
             Section.About -> AboutSection(
@@ -125,6 +128,8 @@ private fun AccountSection(
     epg: String,
     onM3u: (String) -> Unit,
     onEpg: (String) -> Unit,
+    epgOffsetMin: Int,
+    onEpgOffset: (Int) -> Unit,
     onSave: () -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
@@ -137,9 +142,37 @@ private fun AccountSection(
         )
         UrlField("Adres playlisty M3U", m3u, onM3u)
         UrlField("Adres EPG (XMLTV, także .xml.gz), opcjonalnie", epg, onEpg)
+        EpgOffsetRow(epgOffsetMin, onEpgOffset)
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             Button(onClick = onSave, enabled = m3u.isNotBlank()) { Text("Zapisz i wczytaj kanały") }
         }
+    }
+}
+
+@Composable
+private fun EpgOffsetRow(offsetMin: Int, onChange: (Int) -> Unit) {
+    val step = app.iptvtv.EPG_OFFSET_STEP_MIN
+    val label = when {
+        offsetMin == 0 -> "0 (bez korekty)"
+        else -> {
+            val a = kotlin.math.abs(offsetMin)
+            val t = if (a % 60 == 0) "${a / 60} h" else if (a < 60) "$a min" else "${a / 60} h ${a % 60} min"
+            (if (offsetMin > 0) "+" else "−") + t
+        }
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text("Korekta czasu EPG", style = MaterialTheme.typography.labelLarge)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            Button(onClick = { onChange(-step) }) { Text("−") }
+            Text(label, style = MaterialTheme.typography.titleLarge, modifier = Modifier.widthIn(min = 160.dp))
+            Button(onClick = { onChange(step) }) { Text("+") }
+            if (offsetMin != 0) Button(onClick = { onChange(-offsetMin) }) { Text("Zeruj") }
+        }
+        Text(
+            "Jeśli program pokazuje się za późno (np. po zmianie czasu), ustaw −1 h; jeśli za wcześnie, +1 h. Działa od razu.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 
