@@ -43,7 +43,7 @@ import app.iptvtv.data.DEFAULT_ACCOUNT_ID
 private const val KEY_NEW = "new"
 private const val KEY_APP = "app"
 private const val KEY_ABOUT = "about"
-private const val KEY_ACC = "acc:"
+private const val KEY_ACC = "account"
 
 private data class NavItem(val key: String, val label: String)
 
@@ -70,52 +70,61 @@ fun SetupScreen(
     onDeleteAccount: (String) -> Unit,
     onCancel: () -> Unit,
 ) {
-    var page by rememberSaveable { mutableStateOf(KEY_ACC + DEFAULT_ACCOUNT_ID) }
+    var page by rememberSaveable { mutableStateOf(KEY_ACC) }
+    // Które konto jest otwarte w "Ustawieniach konta" (id konta albo KEY_NEW przy dodawaniu).
+    var accSel by rememberSaveable { mutableStateOf(DEFAULT_ACCOUNT_ID) }
     BackHandler(enabled = canCancel, onBack = onCancel)
 
-    val nav = buildList {
-        accounts.forEach { add(NavItem(KEY_ACC + it.id, (if (it.id == activeAccountId) "✓ " else "") + it.name)) }
-        add(NavItem(KEY_NEW, "+ Dodaj konto"))
-        add(NavItem(KEY_APP, "Ustawienia aplikacji"))
-        add(NavItem(KEY_ABOUT, "O aplikacji"))
-    }
+    val nav = listOf(
+        NavItem(KEY_ACC, "Ustawienia konta"),
+        NavItem(KEY_APP, "Ustawienia aplikacji"),
+        NavItem(KEY_ABOUT, "O aplikacji"),
+    )
     // Usunięte konto: wróć na domyślne.
-    if (page.startsWith(KEY_ACC) && accounts.none { KEY_ACC + it.id == page }) page = KEY_ACC + DEFAULT_ACCOUNT_ID
+    if (accSel != KEY_NEW && accounts.none { it.id == accSel }) accSel = DEFAULT_ACCOUNT_ID
+    val draftId = rememberSaveable { "acc-" + java.util.UUID.randomUUID().toString().take(8) }
 
     val content: @Composable () -> Unit = {
-        when {
-            page == KEY_NEW -> {
-                val draftId = rememberSaveable { "acc-" + java.util.UUID.randomUUID().toString().take(8) }
-                AccountSection(
-                    key = draftId, account = Account(draftId, "", "", ""), isDefault = false, isNew = true,
-                    isActive = false,
-                    epgOffsetMin = epgOffsetMin, onEpgOffset = onEpgOffset,
-                    epgLocalTime = epgLocalTime, onEpgLocalTime = onEpgLocalTime,
-                    onSave = { onSaveAccount(it); page = KEY_ACC + it.id },
-                    onDelete = {},
-                )
-            }
-            page == KEY_APP -> AppSection(
+        when (page) {
+            KEY_APP -> AppSection(
                 themeMode = themeMode, onThemeMode = onThemeMode,
                 accent = accent, onAccent = onAccent,
                 showDiag = showDiag, onShowDiag = onShowDiag,
             )
-            page == KEY_ABOUT -> AboutSection(
+            KEY_ABOUT -> AboutSection(
                 versionName = versionName,
                 updatesEnabled = updatesEnabled,
                 updateText = updateText,
                 onCheckUpdate = onCheckUpdate,
             )
-            else -> {
-                val acc = accounts.firstOrNull { KEY_ACC + it.id == page } ?: accounts.firstOrNull()
-                if (acc != null) AccountSection(
-                    key = acc.id, account = acc, isDefault = acc.id == DEFAULT_ACCOUNT_ID, isNew = false,
-                    isActive = acc.id == activeAccountId,
-                    epgOffsetMin = epgOffsetMin, onEpgOffset = onEpgOffset,
-                    epgLocalTime = epgLocalTime, onEpgLocalTime = onEpgLocalTime,
-                    onSave = onSaveAccount,
-                    onDelete = { onDeleteAccount(acc.id) },
-                )
+            else -> Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
+                // Konta: domyślne, dodane i "+" do dodania nowego.
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    accounts.forEach { a ->
+                        AccountChip((if (a.id == activeAccountId) "✓ " else "") + a.name, a.id == accSel) { accSel = a.id }
+                    }
+                    AccountChip("+", accSel == KEY_NEW) { accSel = KEY_NEW }
+                }
+                if (accSel == KEY_NEW) {
+                    AccountSection(
+                        key = draftId, account = Account(draftId, "", "", ""), isDefault = false, isNew = true,
+                        isActive = false,
+                        epgOffsetMin = epgOffsetMin, onEpgOffset = onEpgOffset,
+                        epgLocalTime = epgLocalTime, onEpgLocalTime = onEpgLocalTime,
+                        onSave = { onSaveAccount(it); accSel = it.id },
+                        onDelete = {},
+                    )
+                } else {
+                    val acc = accounts.firstOrNull { it.id == accSel } ?: accounts.firstOrNull()
+                    if (acc != null) AccountSection(
+                        key = acc.id, account = acc, isDefault = acc.id == DEFAULT_ACCOUNT_ID, isNew = false,
+                        isActive = acc.id == activeAccountId,
+                        epgOffsetMin = epgOffsetMin, onEpgOffset = onEpgOffset,
+                        epgLocalTime = epgLocalTime, onEpgLocalTime = onEpgLocalTime,
+                        onSave = onSaveAccount,
+                        onDelete = { onDeleteAccount(acc.id) },
+                    )
+                }
             }
         }
     }
@@ -166,6 +175,20 @@ fun SetupScreen(
         // Prawa kolumna: zawartość wybranej sekcji
         Column(Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState())) { content() }
     }
+}
+
+@Composable
+private fun AccountChip(label: String, selected: Boolean, onClick: () -> Unit) {
+    Button(
+        onClick = onClick,
+        modifier = Modifier.heightIn(min = 48.dp),
+        colors = ButtonDefaults.colors(
+            containerColor = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+            contentColor = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+            focusedContainerColor = MaterialTheme.colorScheme.primary,
+            focusedContentColor = MaterialTheme.colorScheme.onPrimary,
+        ),
+    ) { Text(label, maxLines = 1) }
 }
 
 @Composable
