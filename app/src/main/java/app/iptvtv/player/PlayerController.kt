@@ -41,8 +41,9 @@ class PlayerController(context: Context) {
     private val http = DefaultHttpDataSource.Factory()
         .setUserAgent("Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36")
         .setAllowCrossProtocolRedirects(true)
-        .setConnectTimeoutMs(10_000)
-        .setReadTimeoutMs(15_000)
+        // Krótkie limity: martwy kanał szybko zwalnia połączenie (a z nim tuner w dekoderze) zamiast blokować kolejny.
+        .setConnectTimeoutMs(5_000)
+        .setReadTimeoutMs(8_000)
 
     // Tryb AUTO: ExoPlayer sam rozpoznaje kontener (+ flagi dla TS bez AUD/IDR).
     private val autoExtractors = DefaultExtractorsFactory()
@@ -313,6 +314,8 @@ class PlayerController(context: Context) {
         lastFrames = -1
         main.removeCallbacksAndMessages(null)
         tried.clear()
+        // Twarde zamknięcie poprzedniego strumienia przed otwarciem nowego (zwalnia tuner w dekoderze).
+        player.stop()
         load(ch.url, learned[ch.url] ?: initialAttempt(ch.url))
     }
 
