@@ -28,9 +28,24 @@ class MainActivity : ComponentActivity() {
         setContent { IptvTheme { App(vm) } }
     }
 
+    // Najwyższa częstotliwość odświeżania ekranu przy tej samej rozdzielczości (np. 120 Hz).
+    // Na Androidzie 11+ odtwarzacz nadal podpowiada systemowi liczbę klatek strumienia.
+    @Suppress("DEPRECATION")
+    private fun preferHighRefreshRate() {
+        val d = windowManager.defaultDisplay ?: return
+        val cur = d.mode
+        val best = d.supportedModes
+            .filter { it.physicalWidth == cur.physicalWidth && it.physicalHeight == cur.physicalHeight }
+            .maxByOrNull { it.refreshRate } ?: return
+        if (best.modeId != cur.modeId || window.attributes.preferredDisplayModeId != best.modeId) {
+            window.attributes = window.attributes.apply { preferredDisplayModeId = best.modeId }
+        }
+    }
+
     // Po wyjściu z aplikacji (Home) wstrzymujemy dźwięk, po powrocie wznawiamy.
     override fun onStart() {
         super.onStart()
+        preferHighRefreshRate()
         vm.controller.resume()
     }
 
