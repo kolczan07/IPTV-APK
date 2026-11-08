@@ -15,7 +15,6 @@ import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.datasource.HttpDataSource
-import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
@@ -61,10 +60,6 @@ class PlayerController(context: Context) {
     )
 
     val player: ExoPlayer = ExoPlayer.Builder(context.applicationContext)
-        // Jeśli główny dekoder (np. sprzętowy) zawiedzie lub jest zajęty, spróbuj kolejnego.
-        .setRenderersFactory(
-            DefaultRenderersFactory(context.applicationContext).setEnableDecoderFallback(true)
-        )
         .setMediaSourceFactory(autoSourceFactory)
         .setLoadControl(
             DefaultLoadControl.Builder()
