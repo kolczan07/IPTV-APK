@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.MaterialTheme
 import app.iptvtv.data.ProgrammeEntity
@@ -23,7 +24,7 @@ fun progressOf(p: ProgrammeEntity, now: Long): Float =
 
 @Composable
 fun ProgressLine(fraction: Float, modifier: Modifier = Modifier) {
-    Box(modifier.fillMaxWidth().height(3.dp).background(MaterialTheme.colorScheme.surfaceVariant)) {
+    Box(modifier.fillMaxWidth().height(4.dp).background(Color(0x40FFFFFF))) {
         Box(Modifier.fillMaxWidth(fraction).fillMaxHeight().background(MaterialTheme.colorScheme.primary))
     }
 }

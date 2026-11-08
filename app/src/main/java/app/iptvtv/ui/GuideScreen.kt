@@ -10,6 +10,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.Dp
@@ -149,8 +150,8 @@ private fun ProgrammeCells(
                     .padding(end = 2.dp)
                     .onFocusChanged { if (it.hasFocus) onFocus(p) },
                 colors = CardDefaults.colors(
-                    containerColor = if (airing) MaterialTheme.colorScheme.surfaceVariant
-                    else MaterialTheme.colorScheme.surface,
+                    containerColor = if (airing) Color(0xFF16414F) else Panel,
+                    focusedContainerColor = Color(0xFF24485A),
                 ),
             ) {
                 Box(Modifier.fillMaxSize().padding(horizontal = 10.dp), contentAlignment = Alignment.CenterStart) {

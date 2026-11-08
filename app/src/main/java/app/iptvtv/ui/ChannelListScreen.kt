@@ -106,7 +106,7 @@ fun ChannelListScreen(
             LazyColumn(
                 mod,
                 state = listState,
-                verticalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(3.dp),
             ) {
                 itemsIndexed(shown, key = { _, c -> c.id }) { i, ch ->
                     ChannelRow(
@@ -126,7 +126,7 @@ fun ChannelListScreen(
     if (compact) {
         Column(Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("IPTV", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
+                Text("Telewizja", style = MaterialTheme.typography.headlineSmall, color = Accent, modifier = Modifier.weight(1f))
                 Button(onClick = { onGuide(shown) }, modifier = Modifier.heightIn(min = TOUCH_MIN)) { Text("EPG") }
                 Spacer(Modifier.width(8.dp))
                 Button(onClick = onSettings, modifier = Modifier.heightIn(min = TOUCH_MIN)) { Text("Ustawienia") }
@@ -144,7 +144,7 @@ fun ChannelListScreen(
     Row(Modifier.fillMaxSize().padding(24.dp)) {
         // kategorie i akcje
         Column(Modifier.width(200.dp).fillMaxHeight()) {
-            Text("IPTV", style = MaterialTheme.typography.headlineMedium)
+            Text("Telewizja", style = MaterialTheme.typography.headlineMedium, color = Accent)
             Spacer(Modifier.height(12.dp))
             LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 items(groups) { g -> GroupButton(g, g == active, Modifier.fillMaxWidth()) { selected = g } }
@@ -176,8 +176,10 @@ private fun GroupButton(group: String, active: Boolean, modifier: Modifier, onCl
         onClick = onClick,
         modifier = modifier,
         colors = ButtonDefaults.colors(
-            containerColor = if (active) MaterialTheme.colorScheme.surfaceVariant
-            else MaterialTheme.colorScheme.surface,
+            containerColor = if (active) MaterialTheme.colorScheme.primary else Color.Transparent,
+            contentColor = if (active) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+            focusedContainerColor = if (active) MaterialTheme.colorScheme.primary else PanelHi,
+            focusedContentColor = if (active) MaterialTheme.colorScheme.onPrimary else Color.White,
         ),
     ) { Text(group, maxLines = 1) }
 }
@@ -187,7 +189,7 @@ private fun PreviewPane(controller: PlayerController, ch: ChannelEntity?, epg: E
     Column(modifier) {
         Box(
             Modifier.fillMaxWidth().aspectRatio(16f / 9f)
-                .clip(RoundedCornerShape(8.dp)).background(Color.Black),
+                .clip(RoundedCornerShape(2.dp)).background(Color.Black),
         ) {
             AndroidView(
                 modifier = Modifier.fillMaxSize(),
@@ -241,8 +243,16 @@ private fun ChannelRow(
     onLongClick: () -> Unit,
 ) {
     val cur = epg.nowNext(ch).first
-    Card(onClick = onClick, onLongClick = onLongClick, modifier = modifier.fillMaxWidth()) {
+    Card(
+        onClick = onClick, onLongClick = onLongClick, modifier = modifier.fillMaxWidth(),
+        colors = CardDefaults.colors(
+            containerColor = if (playing) PanelHi else Panel,
+            focusedContainerColor = Color(0xFF24485A),
+        ),
+    ) {
         Row(Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.width(3.dp).height(36.dp).background(if (playing) Accent else Color.Transparent))
+            Spacer(Modifier.width(9.dp))
             AsyncImage(
                 model = ch.logo, contentDescription = null,
                 modifier = Modifier.size(width = 56.dp, height = 36.dp),
@@ -252,7 +262,7 @@ private fun ChannelRow(
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (ch.number != null) {
-                        Text("${ch.number}  ", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("${ch.number}  ", color = Accent, style = MaterialTheme.typography.titleSmall)
                     }
                     Text(ch.name, maxLines = 1, style = MaterialTheme.typography.titleSmall,
                         color = MaterialTheme.colorScheme.onSurface,

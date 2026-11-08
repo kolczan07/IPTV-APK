@@ -29,6 +29,13 @@ import kotlinx.coroutines.delay
 
 private const val SWIPE_PX = 120f
 
+@OptIn(androidx.tv.material3.ExperimentalTvMaterial3Api::class)
+@Composable
+private fun overlayButtonColors() = androidx.tv.material3.ButtonDefaults.colors(
+    containerColor = Color(0xB30A0E12), contentColor = Color.White,
+    focusedContainerColor = Accent, focusedContentColor = Color(0xFF00232B),
+)
+
 @Composable
 fun PlayerScreen(
     queue: List<ChannelEntity>,
@@ -105,7 +112,7 @@ fun PlayerScreen(
             Text(it, modifier = Modifier.align(Alignment.Center).padding(16.dp), color = MaterialTheme.colorScheme.primary)
         }
         controller.audioInfo?.let {
-            Text(it, modifier = Modifier.align(Alignment.TopCenter).padding(top = 72.dp, start = 16.dp, end = 16.dp),
+            Text(it, modifier = Modifier.align(Alignment.TopCenter).padding(top = 140.dp, start = 16.dp, end = 16.dp),
                 style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
         }
         if (overlay && controller.diag.isNotEmpty()) {
@@ -120,23 +127,27 @@ fun PlayerScreen(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Button(onClick = onBack, modifier = Modifier.heightIn(min = 48.dp)) { Text("◀ Lista") }
+                Button(onClick = onBack, modifier = Modifier.heightIn(min = 48.dp), colors = overlayButtonColors()) { Text("◀ Lista") }
                 Spacer(Modifier.weight(1f))
                 Button(
                     onClick = { index = (index - 1 + queue.size) % queue.size; overlay = true },
                     modifier = Modifier.heightIn(min = 48.dp),
+                    colors = overlayButtonColors(),
                 ) { Text("▼ Poprz.") }
                 Button(
                     onClick = { index = (index + 1) % queue.size; overlay = true },
                     modifier = Modifier.heightIn(min = 48.dp),
+                    colors = overlayButtonColors(),
                 ) { Text("▲ Nast.") }
             }
         }
         if (overlay) {
+            // Infobar w stylu MetrixHD: płaski ciemny panel, duży numer kanału, pasek postępu z godzinami.
+            val (cur, next) = epg.nowNext(channel)
             Row(
                 Modifier.align(Alignment.BottomStart).fillMaxWidth()
-                    .background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xDD10222B))))
-                    .padding(horizontal = 24.dp, vertical = 24.dp),
+                    .background(Color(0xE60A0E12))
+                    .padding(horizontal = 20.dp, vertical = 14.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 AsyncImage(
@@ -144,21 +155,24 @@ fun PlayerScreen(
                     modifier = Modifier.size(width = 96.dp, height = 60.dp),
                     contentScale = ContentScale.Fit,
                 )
-                Spacer(Modifier.width(20.dp))
+                Spacer(Modifier.width(16.dp))
                 Column(Modifier.weight(1f)) {
-                    Text(
-                        listOfNotNull(channel.number?.toString(), channel.name).joinToString("  "),
-                        style = MaterialTheme.typography.headlineSmall,
-                        color = Color.White,
-                    )
-                    val (cur, next) = epg.nowNext(channel)
+                    Row(verticalAlignment = Alignment.Bottom) {
+                        channel.number?.let {
+                            Text("$it", style = MaterialTheme.typography.headlineSmall, color = Accent)
+                            Spacer(Modifier.width(12.dp))
+                        }
+                        Text(channel.name, style = MaterialTheme.typography.titleLarge, color = Color.White, maxLines = 1)
+                    }
                     if (cur != null) {
-                        Text(
-                            "${clock(cur.start)}–${clock(cur.stop)}  ${cur.title}",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = Color.White,
-                       )
-                        ProgressLine(progressOf(cur, epg.now), Modifier.padding(vertical = 6.dp))
+                        Text(cur.title, style = MaterialTheme.typography.titleMedium, color = Color.White, maxLines = 1)
+                        Row(Modifier.padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text(clock(cur.start), style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            ProgressLine(progressOf(cur, epg.now), Modifier.weight(1f).padding(horizontal = 8.dp))
+                            Text(clock(cur.stop), style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
                         cur.description?.let {
                             Text(it, maxLines = 2, style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -170,7 +184,8 @@ fun PlayerScreen(
                         Text(
                             "Następnie ${clock(next.start)}  ${next.title}",
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = Accent,
+                            maxLines = 1,
                         )
                     }
                 }

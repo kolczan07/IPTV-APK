@@ -152,7 +152,7 @@ private fun AboutSection(
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
         Text("O aplikacji", style = MaterialTheme.typography.headlineLarge)
-        Text("IPTV", style = MaterialTheme.typography.titleLarge)
+        Text("Telewizja", style = MaterialTheme.typography.titleLarge)
         Text(
             "Odtwarzacz IPTV na Android TV (Kotlin, Compose for TV, Media3). " +
                 "Własne źródła: link do M3U + link do EPG (XMLTV).",
