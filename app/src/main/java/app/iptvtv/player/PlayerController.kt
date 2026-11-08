@@ -203,6 +203,9 @@ class PlayerController(context: Context) {
         val RETRYABLE = setOf(
             PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW,
             PlaybackException.ERROR_CODE_IO_UNSPECIFIED,
+            // Chwilowo "nie-strumień" z serwera (np. tuner się zajmuje przy zappingu) — drugie podejście zwykle działa.
+            PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED,
+            PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED,
             PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED,
             PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT,
             PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS,
