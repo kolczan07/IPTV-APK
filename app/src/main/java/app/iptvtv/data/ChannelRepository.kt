@@ -2,6 +2,8 @@ package app.iptvtv.data
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.Credentials
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.BufferedInputStream
@@ -24,6 +26,15 @@ class ChannelRepository(
     val channels = dao.all()
     val recentUrls = history.recentUrls()
 
+    // OkHttp nie wysyła danych logowania z adresu (user:pass@host) — dokładamy nagłówek Basic Auth.
+    private fun requestFor(url: String): Request {
+        val b = Request.Builder().url(url)
+        url.toHttpUrlOrNull()?.takeIf { it.username.isNotEmpty() }?.let {
+            b.header("Authorization", Credentials.basic(it.username, it.password))
+        }
+        return b.build()
+    }
+
     suspend fun markWatched(url: String) = history.mark(url, System.currentTimeMillis())
     suspend fun clearHistory() = history.clear()
 
@@ -31,7 +42,7 @@ class ChannelRepository(
 
     /** Pobiera M3U i podmienia kanały w bazie. Zwraca liczbę kanałów. */
     suspend fun refresh(url: String): Int = withContext(Dispatchers.IO) {
-        val request = Request.Builder().url(url).build()
+        val request = requestFor(url)
         val parsed = client.newCall(request).execute().use { resp ->
             if (!resp.isSuccessful) throw IOException("HTTP ${resp.code}")
             resp.body!!.byteStream().bufferedReader().useLines { M3uParser.parse(it) }
@@ -49,7 +60,7 @@ class ChannelRepository(
     /** Pobiera XMLTV (także .gz) i zapisuje programy z okna -2 h … +36 h. Zwraca liczbę programów. */
     suspend fun refreshEpg(url: String): Int = withContext(Dispatchers.IO) {
         val now = System.currentTimeMillis()
-        val request = Request.Builder().url(url).build()
+        val request = requestFor(url)
         val items = client.newCall(request).execute().use { resp ->
             if (!resp.isSuccessful) throw IOException("HTTP ${resp.code}")
             val raw = BufferedInputStream(resp.body!!.byteStream())
