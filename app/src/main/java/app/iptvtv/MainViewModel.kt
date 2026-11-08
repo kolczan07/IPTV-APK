@@ -39,6 +39,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val epgUrl = settings.epgUrl.stateIn(viewModelScope, SharingStarted.Eagerly, "")
     val epgOffsetMin = settings.epgOffsetMin.stateIn(viewModelScope, SharingStarted.Eagerly, 0)
 
+    val epgLocalTime = settings.epgLocalTime.stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    /** Przełącza tryb "czas z EPG = czas lokalny" i pobiera EPG od nowa (zmiana dotyczy parsowania). */
+    fun setEpgLocalTime(v: Boolean) {
+        viewModelScope.launch {
+            settings.setEpgLocalTime(v)
+            refresh(force = true)
+        }
+    }
+
     /** Zmienia korektę czasu EPG o [delta] minut (ograniczone do ±12 h). Działa od razu, bez pobierania EPG. */
     fun adjustEpgOffset(delta: Int) {
         val next = (epgOffsetMin.value + delta).coerceIn(-EPG_OFFSET_MAX_MIN, EPG_OFFSET_MAX_MIN)
@@ -135,7 +145,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             }
             val epgJob = async {
                 if (epg.isBlank() || epgFresh) null else try {
-                    val n = repo.refreshEpg(epg)
+                    val n = repo.refreshEpg(epg, settings.epgLocalTime.first())
                     settings.markEpgFetched(System.currentTimeMillis())
                     "EPG: $n programów"
                 } catch (e: Exception) {

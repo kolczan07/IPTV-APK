@@ -1,6 +1,7 @@
 package app.iptvtv.data
 
 import android.content.Context
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
@@ -20,6 +21,12 @@ class SettingsStore(private val ctx: Context) {
     private val epgKey = stringPreferencesKey("epg_url")
 
     private val epgAtKey = longPreferencesKey("epg_fetched_at")
+    private val epgLocalKey = booleanPreferencesKey("epg_local_time")
+
+    /** Traktuj godziny w XMLTV jako czas lokalny urządzenia, ignorując strefę zapisaną w pliku. */
+    val epgLocalTime: Flow<Boolean> = ctx.dataStore.data.map { it[epgLocalKey] ?: false }
+    suspend fun setEpgLocalTime(v: Boolean) { ctx.dataStore.edit { it[epgLocalKey] = v } }
+
     private val epgOffsetKey = intPreferencesKey("epg_offset_min")
 
     /** Korekta czasu EPG w minutach (może być ujemna); stosowana przy odczycie, więc nie wymaga ponownego pobrania. */

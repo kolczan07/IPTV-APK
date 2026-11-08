@@ -43,6 +43,8 @@ fun SetupScreen(
     onCheckUpdate: () -> Unit,
     epgOffsetMin: Int,
     onEpgOffset: (Int) -> Unit,
+    epgLocalTime: Boolean,
+    onEpgLocalTime: (Boolean) -> Unit,
     onSave: (String, String) -> Unit,
     onCancel: () -> Unit,
 ) {
@@ -57,6 +59,7 @@ fun SetupScreen(
                 m3u = m3u, epg = epg,
                 onM3u = { m3u = it }, onEpg = { epg = it },
                 epgOffsetMin = epgOffsetMin, onEpgOffset = onEpgOffset,
+                epgLocalTime = epgLocalTime, onEpgLocalTime = onEpgLocalTime,
                 onSave = { onSave(m3u, epg) },
             )
             Section.About -> AboutSection(
@@ -130,6 +133,8 @@ private fun AccountSection(
     onEpg: (String) -> Unit,
     epgOffsetMin: Int,
     onEpgOffset: (Int) -> Unit,
+    epgLocalTime: Boolean,
+    onEpgLocalTime: (Boolean) -> Unit,
     onSave: () -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
@@ -142,6 +147,18 @@ private fun AccountSection(
         )
         UrlField("Adres playlisty M3U", m3u, onM3u)
         UrlField("Adres EPG (XMLTV, także .xml.gz), opcjonalnie", epg, onEpg)
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("Strefa czasowa EPG", style = MaterialTheme.typography.labelLarge)
+            Button(onClick = { onEpgLocalTime(!epgLocalTime) }) {
+                Text(if (epgLocalTime) "Czas lokalny urządzenia (ignoruj strefę z pliku)" else "Według strefy z pliku EPG")
+            }
+            Text(
+                "Włącz, jeśli plik EPG ma błędną strefę po zmianie czasu: godziny są wtedy czytane jako czas lokalny " +
+                    "urządzenia, z automatyczną zmianą lato/zima. Zmiana pobiera EPG ponownie.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
         EpgOffsetRow(epgOffsetMin, onEpgOffset)
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             Button(onClick = onSave, enabled = m3u.isNotBlank()) { Text("Zapisz i wczytaj kanały") }

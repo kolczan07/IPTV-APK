@@ -61,7 +61,7 @@ class ChannelRepository(
     }
 
     /** Pobiera XMLTV (także .gz) i zapisuje programy z okna -14 h … +48 h (zapas na korektę czasu). Zwraca liczbę programów. */
-    suspend fun refreshEpg(url: String): Int = withContext(Dispatchers.IO) {
+    suspend fun refreshEpg(url: String, localTime: Boolean = false): Int = withContext(Dispatchers.IO) {
         val now = System.currentTimeMillis()
         val request = requestFor(url)
         val items = client.newCall(request).execute().use { resp ->
@@ -72,7 +72,8 @@ class ChannelRepository(
             val b1 = raw.read()
             raw.reset()
             val stream = if (b0 == 0x1f && b1 == 0x8b) GZIPInputStream(raw) else raw
-            XmltvParser.parse(stream, from = now - 2 * HOUR - OFFSET_MARGIN, to = now + 36 * HOUR + OFFSET_MARGIN)
+            XmltvParser.parse(stream, from = now - 2 * HOUR - OFFSET_MARGIN, to = now + 36 * HOUR + OFFSET_MARGIN,
+                localZone = if (localTime) java.util.TimeZone.getDefault() else null)
         }
         if (items.isEmpty()) throw IOException("brak programów w oknie czasowym")
         epg.replaceAll(items)

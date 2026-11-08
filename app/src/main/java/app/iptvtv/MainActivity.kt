@@ -79,6 +79,8 @@ private fun App(vm: MainViewModel) {
                 onCheckUpdate = { vm.checkUpdate(manual = true) },
                 epgOffsetMin = vm.epgOffsetMin.collectAsStateWithLifecycle().value,
                 onEpgOffset = vm::adjustEpgOffset,
+                epgLocalTime = vm.epgLocalTime.collectAsStateWithLifecycle().value,
+                onEpgLocalTime = vm::setEpgLocalTime,
                 onSave = vm::save, onCancel = vm::backToList,
             )
             Screen.List -> ChannelListScreen(

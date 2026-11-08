@@ -3,11 +3,12 @@ package app.iptvtv.data
 import android.util.Xml
 import org.xmlpull.v1.XmlPullParser
 import java.io.InputStream
+import java.util.TimeZone
 
 /** Strumieniowy parser XMLTV: zachowuje tylko programy z okna [from, to]. */
 object XmltvParser {
     /** Ręczny parser "yyyyMMddHHmmss[ +hhmm]" — dużo szybszy niż SimpleDateFormat przy dziesiątkach tysięcy wpisów. */
-    private fun time(raw: String?): Long? {
+    private fun time(raw: String?, localZone: TimeZone?): Long? {
         val t = raw?.trim() ?: return null
         if (t.length < 14) return null
         fun d(i: Int, n: Int): Int {
@@ -29,7 +30,12 @@ object XmltvParser {
             val zm = z.substring(3, 5).toIntOrNull()
             if (zh != null && zm != null) offset = (zh * 3600L + zm * 60L) * (if (z[0] == '-') -1 else 1)
         }
-        return (daysFromCivil(y, mo, da) * 86400L + h * 3600L + mi * 60L + s - offset) * 1000L
+        val naive = (daysFromCivil(y, mo, da) * 86400L + h * 3600L + mi * 60L + s) * 1000L
+        if (localZone != null) {
+            // Zignoruj przesunięcie z pliku: cyfry to czas ścienny w strefie urządzenia (uwzględnia zmianę czasu).
+            return naive - localZone.getOffset(naive - localZone.rawOffset)
+        }
+        return naive - offset * 1000L
     }
 
     private fun daysFromCivil(y0: Int, m: Int, d: Int): Long {
@@ -41,7 +47,7 @@ object XmltvParser {
         return era.toLong() * 146097L + doe - 719468L
     }
 
-    fun parse(input: InputStream, from: Long, to: Long): List<ProgrammeEntity> {
+    fun parse(input: InputStream, from: Long, to: Long, localZone: TimeZone? = null): List<ProgrammeEntity> {
         val out = ArrayList<ProgrammeEntity>()
         val p = Xml.newPullParser()
         p.setFeature(XmlPullParser.FEATURE_PROCESS_NAMESPACES, false)
@@ -51,8 +57,8 @@ object XmltvParser {
         while (ev != XmlPullParser.END_DOCUMENT) {
             if (ev == XmlPullParser.START_TAG && p.name == "programme") {
                 val channel = p.getAttributeValue(null, "channel")?.trim()?.lowercase()
-                val start = time(p.getAttributeValue(null, "start"))
-                val stop = time(p.getAttributeValue(null, "stop"))
+                val start = time(p.getAttributeValue(null, "start"), localZone)
+                val stop = time(p.getAttributeValue(null, "stop"), localZone)
                 val inWindow = channel != null && start != null && stop != null && stop > from && start < to
                 if (!inWindow) {
                     // poza oknem czasowym: przeskocz zawartość bez budowania stringów
