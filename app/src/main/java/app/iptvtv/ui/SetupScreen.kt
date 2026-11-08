@@ -48,6 +48,8 @@ fun SetupScreen(
     onThemeMode: (ThemeMode) -> Unit,
     accent: AccentColor,
     onAccent: (AccentColor) -> Unit,
+    showDiag: Boolean,
+    onShowDiag: (Boolean) -> Unit,
     epgOffsetMin: Int,
     onEpgOffset: (Int) -> Unit,
     epgLocalTime: Boolean,
@@ -72,6 +74,7 @@ fun SetupScreen(
             Section.App -> AppSection(
                 themeMode = themeMode, onThemeMode = onThemeMode,
                 accent = accent, onAccent = onAccent,
+                showDiag = showDiag, onShowDiag = onShowDiag,
             )
             Section.About -> AboutSection(
                 versionName = versionName,
@@ -210,6 +213,8 @@ private fun AppSection(
     onThemeMode: (ThemeMode) -> Unit,
     accent: AccentColor,
     onAccent: (AccentColor) -> Unit,
+    showDiag: Boolean,
+    onShowDiag: (Boolean) -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
         Text("Ustawienia aplikacji", style = MaterialTheme.typography.headlineLarge)
@@ -258,6 +263,18 @@ private fun AppSection(
                     }
                 }
             }
+        }
+
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Odtwarzacz", style = MaterialTheme.typography.labelLarge)
+            Button(onClick = { onShowDiag(!showDiag) }, modifier = Modifier.heightIn(min = 48.dp)) {
+                Text(if (showDiag) "✓ Pokazuj diagnostykę strumienia" else "Pokazuj diagnostykę strumienia")
+            }
+            Text(
+                "Linia z formatem, dekoderami i buforem nad obrazem po wywołaniu nakładki. Przydatna tylko przy szukaniu błędów.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }

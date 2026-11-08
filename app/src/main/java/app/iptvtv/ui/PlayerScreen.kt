@@ -44,6 +44,7 @@ fun PlayerScreen(
     controller: PlayerController,
     onTune: (ChannelEntity) -> Unit,
     onBack: () -> Unit,
+    showDiag: Boolean = false,
 ) {
     BackHandler(onBack = onBack)
     if (queue.isEmpty()) { onBack(); return }
@@ -117,7 +118,7 @@ fun PlayerScreen(
             Text(it, modifier = Modifier.align(Alignment.TopCenter).padding(top = 140.dp, start = 16.dp, end = 16.dp),
                 style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
         }
-        if (overlay && controller.diag.isNotEmpty()) {
+        if (showDiag && overlay && controller.diag.isNotEmpty()) {
             Text(controller.diag,
                 modifier = Modifier.align(Alignment.TopStart).padding(top = 68.dp, start = 12.dp, end = 12.dp),
                 style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)

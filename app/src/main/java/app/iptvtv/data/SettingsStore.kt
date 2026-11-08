@@ -29,6 +29,12 @@ class SettingsStore(private val ctx: Context) {
     suspend fun setThemeMode(v: String) { ctx.dataStore.edit { it[themeKey] = v } }
     suspend fun setAccentIdx(v: Int) { ctx.dataStore.edit { it[accentKey] = v } }
 
+    private val diagKey = booleanPreferencesKey("show_diag")
+
+    /** Linia diagnostyczna strumienia w odtwarzaczu (domyślnie wyłączona). */
+    val showDiag: Flow<Boolean> = ctx.dataStore.data.map { it[diagKey] ?: false }
+    suspend fun setShowDiag(v: Boolean) { ctx.dataStore.edit { it[diagKey] = v } }
+
     private val epgLocalKey = booleanPreferencesKey("epg_local_time")
 
     /** Traktuj godziny w XMLTV jako czas lokalny urządzenia, ignorując strefę zapisaną w pliku. */

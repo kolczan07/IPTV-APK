@@ -48,6 +48,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun setThemeMode(m: app.iptvtv.ui.ThemeMode) { viewModelScope.launch { settings.setThemeMode(m.name) } }
     fun setAccent(a: app.iptvtv.ui.AccentColor) { viewModelScope.launch { settings.setAccentIdx(a.ordinal) } }
 
+    val showDiag = settings.showDiag.stateIn(viewModelScope, SharingStarted.Eagerly, false)
+    fun setShowDiag(v: Boolean) { viewModelScope.launch { settings.setShowDiag(v) } }
+
     val epgLocalTime = settings.epgLocalTime.stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     /** Przełącza tryb "czas z EPG = czas lokalny" i pobiera EPG od nowa (zmiana dotyczy parsowania). */

@@ -86,6 +86,8 @@ private fun App(vm: MainViewModel) {
                 onThemeMode = vm::setThemeMode,
                 accent = vm.accent.collectAsStateWithLifecycle().value,
                 onAccent = vm::setAccent,
+                showDiag = vm.showDiag.collectAsStateWithLifecycle().value,
+                onShowDiag = vm::setShowDiag,
                 epgOffsetMin = vm.epgOffsetMin.collectAsStateWithLifecycle().value,
                 onEpgOffset = vm::adjustEpgOffset,
                 epgLocalTime = vm.epgLocalTime.collectAsStateWithLifecycle().value,
@@ -105,6 +107,7 @@ private fun App(vm: MainViewModel) {
             Screen.Player -> PlayerScreen(
                 queue = vm.queue, startIndex = vm.startIndex, epg = guide,
                 controller = vm.controller, onTune = vm::tune, onBack = vm::closePlayer,
+                showDiag = vm.showDiag.collectAsStateWithLifecycle().value,
             )
         }
         if (vm.screen == Screen.List || vm.screen == Screen.Setup) {
