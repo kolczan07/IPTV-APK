@@ -13,8 +13,11 @@ import androidx.compose.ui.composed
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.tv.material3.ButtonColors
 import androidx.tv.material3.ButtonDefaults
+import androidx.tv.material3.CardBorder
 import androidx.tv.material3.CardColors
 import androidx.tv.material3.CardDefaults
+import androidx.tv.material3.CardScale
+import androidx.tv.material3.CardShape
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 
 /**
@@ -56,6 +59,9 @@ fun Card(
     modifier: Modifier = Modifier,
     onLongClick: (() -> Unit)? = null,
     colors: CardColors = CardDefaults.colors(),
+    shape: CardShape = CardDefaults.shape(),
+    border: CardBorder = CardDefaults.border(),
+    scale: CardScale = CardDefaults.scale(),
     content: @Composable ColumnScope.() -> Unit,
 ) {
     androidx.tv.material3.Card(
@@ -63,6 +69,9 @@ fun Card(
         onLongClick = onLongClick,
         modifier = modifier.touchClick(onClick, onLongClick),
         colors = colors,
+        shape = shape,
+        border = border,
+        scale = scale,
         content = content,
     )
 }

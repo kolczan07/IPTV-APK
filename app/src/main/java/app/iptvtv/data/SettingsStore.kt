@@ -16,6 +16,26 @@ private val Context.dataStore by preferencesDataStore("settings")
 private val DEFAULT_M3U = app.iptvtv.BuildConfig.DEFAULT_M3U
 private val DEFAULT_EPG = app.iptvtv.BuildConfig.DEFAULT_EPG
 
+const val DEFAULT_ACCOUNT_ID = "default"
+
+/** Źródło telewizji: playlista M3U + opcjonalny EPG. */
+data class Account(val id: String, val name: String, val m3u: String, val epg: String)
+
+private fun accountsToJson(list: List<Account>): String =
+    org.json.JSONArray().also { arr ->
+        list.forEach {
+            arr.put(org.json.JSONObject().put("id", it.id).put("name", it.name).put("m3u", it.m3u).put("epg", it.epg))
+        }
+    }.toString()
+
+private fun accountsFromJson(s: String): List<Account>? = try {
+    val arr = org.json.JSONArray(s)
+    (0 until arr.length()).map {
+        val o = arr.getJSONObject(it)
+        Account(o.getString("id"), o.getString("name"), o.optString("m3u"), o.optString("epg"))
+    }.takeIf { it.isNotEmpty() }
+} catch (e: Exception) { null }
+
 class SettingsStore(private val ctx: Context) {
     private val m3uKey = stringPreferencesKey("m3u_url")
     private val epgKey = stringPreferencesKey("epg_url")
@@ -53,6 +73,27 @@ class SettingsStore(private val ctx: Context) {
 
     val m3uUrl: Flow<String> = ctx.dataStore.data.map { it[m3uKey] ?: DEFAULT_M3U }
     val epgUrl: Flow<String> = ctx.dataStore.data.map { it[epgKey] ?: DEFAULT_EPG }
+
+    private val accountsKey = stringPreferencesKey("accounts_json")
+    private val activeAccountKey = stringPreferencesKey("active_account")
+
+    /** Lista kont; dopóki nic nie zapisano, jedyne konto to domyślne, zbudowane ze starych kluczy m3u/epg. */
+    val accounts: Flow<List<Account>> = ctx.dataStore.data.map { p ->
+        p[accountsKey]?.let(::accountsFromJson)
+            ?: listOf(Account(DEFAULT_ACCOUNT_ID, "Konto domyślne", p[m3uKey] ?: DEFAULT_M3U, p[epgKey] ?: DEFAULT_EPG))
+    }
+    val activeAccountId: Flow<String> = ctx.dataStore.data.map { it[activeAccountKey] ?: DEFAULT_ACCOUNT_ID }
+
+    /** Zapisuje listę kont i ustawia aktywne; adresy aktywnego konta trafiają do kluczy używanych przy odświeżaniu. */
+    suspend fun saveAccounts(list: List<Account>, activeId: String) {
+        val active = list.firstOrNull { it.id == activeId } ?: list.first()
+        ctx.dataStore.edit {
+            it[accountsKey] = accountsToJson(list)
+            it[activeAccountKey] = active.id
+            it[m3uKey] = active.m3u
+            it[epgKey] = active.epg
+        }
+    }
 
     suspend fun save(m3u: String, epg: String) {
         ctx.dataStore.edit {

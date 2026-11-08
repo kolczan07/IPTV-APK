@@ -1,44 +1,56 @@
 package app.iptvtv.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.tv.material3.Border
 import androidx.tv.material3.ButtonDefaults
+import androidx.tv.material3.CardDefaults
+import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
+import app.iptvtv.data.Account
+import app.iptvtv.data.DEFAULT_ACCOUNT_ID
 
-private enum class Section(val label: String) {
-    Account("Ustawienia konta"),
-    App("Ustawienia aplikacji"),
-    About("O aplikacji"),
-}
+private const val KEY_NEW = "new"
+private const val KEY_APP = "app"
+private const val KEY_ABOUT = "about"
+private const val KEY_ACC = "acc:"
+
+private data class NavItem(val key: String, val label: String)
 
 @Composable
 fun SetupScreen(
-    initialM3u: String,
-    initialEpg: String,
+    accounts: List<Account>,
+    activeAccountId: String,
     canCancel: Boolean,
     versionName: String,
     updatesEnabled: Boolean,
@@ -54,35 +66,70 @@ fun SetupScreen(
     onEpgOffset: (Int) -> Unit,
     epgLocalTime: Boolean,
     onEpgLocalTime: (Boolean) -> Unit,
-    onSave: (String, String) -> Unit,
+    onSaveAccount: (Account) -> Unit,
+    onDeleteAccount: (String) -> Unit,
     onCancel: () -> Unit,
 ) {
-    var m3u by remember { mutableStateOf(initialM3u) }
-    var epg by remember { mutableStateOf(initialEpg) }
-    var section by rememberSaveable { mutableStateOf(Section.Account) }
+    var page by rememberSaveable { mutableStateOf(KEY_ACC + DEFAULT_ACCOUNT_ID) }
     BackHandler(enabled = canCancel, onBack = onCancel)
 
+    val nav = buildList {
+        accounts.forEach { add(NavItem(KEY_ACC + it.id, (if (it.id == activeAccountId) "✓ " else "") + it.name)) }
+        add(NavItem(KEY_NEW, "+ Dodaj konto"))
+        add(NavItem(KEY_APP, "Ustawienia aplikacji"))
+        add(NavItem(KEY_ABOUT, "O aplikacji"))
+    }
+    // Usunięte konto: wróć na domyślne.
+    if (page.startsWith(KEY_ACC) && accounts.none { KEY_ACC + it.id == page }) page = KEY_ACC + DEFAULT_ACCOUNT_ID
+
     val content: @Composable () -> Unit = {
-        when (section) {
-            Section.Account -> AccountSection(
-                m3u = m3u, epg = epg,
-                onM3u = { m3u = it }, onEpg = { epg = it },
-                epgOffsetMin = epgOffsetMin, onEpgOffset = onEpgOffset,
-                epgLocalTime = epgLocalTime, onEpgLocalTime = onEpgLocalTime,
-                onSave = { onSave(m3u, epg) },
-            )
-            Section.App -> AppSection(
+        when {
+            page == KEY_NEW -> {
+                val draftId = rememberSaveable { "acc-" + java.util.UUID.randomUUID().toString().take(8) }
+                AccountSection(
+                    key = draftId, account = Account(draftId, "", "", ""), isDefault = false, isNew = true,
+                    isActive = false,
+                    epgOffsetMin = epgOffsetMin, onEpgOffset = onEpgOffset,
+                    epgLocalTime = epgLocalTime, onEpgLocalTime = onEpgLocalTime,
+                    onSave = { onSaveAccount(it); page = KEY_ACC + it.id },
+                    onDelete = {},
+                )
+            }
+            page == KEY_APP -> AppSection(
                 themeMode = themeMode, onThemeMode = onThemeMode,
                 accent = accent, onAccent = onAccent,
                 showDiag = showDiag, onShowDiag = onShowDiag,
             )
-            Section.About -> AboutSection(
+            page == KEY_ABOUT -> AboutSection(
                 versionName = versionName,
                 updatesEnabled = updatesEnabled,
                 updateText = updateText,
                 onCheckUpdate = onCheckUpdate,
             )
+            else -> {
+                val acc = accounts.firstOrNull { KEY_ACC + it.id == page } ?: accounts.firstOrNull()
+                if (acc != null) AccountSection(
+                    key = acc.id, account = acc, isDefault = acc.id == DEFAULT_ACCOUNT_ID, isNew = false,
+                    isActive = acc.id == activeAccountId,
+                    epgOffsetMin = epgOffsetMin, onEpgOffset = onEpgOffset,
+                    epgLocalTime = epgLocalTime, onEpgLocalTime = onEpgLocalTime,
+                    onSave = onSaveAccount,
+                    onDelete = { onDeleteAccount(acc.id) },
+                )
+            }
         }
+    }
+
+    @Composable
+    fun NavButton(item: NavItem, modifier: Modifier) {
+        val selected = item.key == page
+        Button(
+            onClick = { page = item.key },
+            modifier = modifier,
+            colors = ButtonDefaults.colors(
+                containerColor = if (selected) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.surface,
+            ),
+        ) { Text(item.label, maxLines = 1, overflow = TextOverflow.Ellipsis) }
     }
 
     // Wąski ekran (telefon w pionie): sekcje jako rząd przycisków u góry, treść przewijana.
@@ -91,16 +138,7 @@ fun SetupScreen(
             Text("Ustawienia", style = MaterialTheme.typography.headlineMedium)
             Spacer(Modifier.height(12.dp))
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Section.entries.forEach { s ->
-                    Button(
-                        onClick = { section = s },
-                        modifier = Modifier.heightIn(min = 48.dp),
-                        colors = ButtonDefaults.colors(
-                            containerColor = if (s == section) MaterialTheme.colorScheme.surfaceVariant
-                            else MaterialTheme.colorScheme.surface,
-                        ),
-                    ) { Text(s.label, maxLines = 1) }
-                }
+                nav.forEach { NavButton(it, Modifier.heightIn(min = 48.dp)) }
                 if (canCancel) Button(onClick = onCancel, modifier = Modifier.heightIn(min = 48.dp)) { Text("Anuluj") }
             }
             Spacer(Modifier.height(16.dp))
@@ -110,24 +148,15 @@ fun SetupScreen(
     }
 
     Row(Modifier.fillMaxSize().padding(horizontal = 48.dp, vertical = 32.dp)) {
-        // Lewa kolumna: nawigacja między sekcjami
-        Column(Modifier.width(240.dp).fillMaxHeight()) {
+        // Lewa kolumna: konta i sekcje
+        Column(Modifier.width(260.dp).fillMaxHeight()) {
             Text("Ustawienia", style = MaterialTheme.typography.headlineMedium)
             Spacer(Modifier.height(16.dp))
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(Section.entries) { s ->
-                    Button(
-                        onClick = { section = s },
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.colors(
-                            containerColor = if (s == section) MaterialTheme.colorScheme.surfaceVariant
-                            else MaterialTheme.colorScheme.surface,
-                        ),
-                    ) { Text(s.label, maxLines = 1) }
-                }
+            LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(nav) { NavButton(it, Modifier.fillMaxWidth()) }
             }
-            Spacer(Modifier.weight(1f))
             if (canCancel) {
+                Spacer(Modifier.height(8.dp))
                 Button(onClick = onCancel, modifier = Modifier.fillMaxWidth()) { Text("Anuluj") }
             }
         }
@@ -135,32 +164,51 @@ fun SetupScreen(
         Spacer(Modifier.width(32.dp))
 
         // Prawa kolumna: zawartość wybranej sekcji
-        Column(Modifier.weight(1f).fillMaxHeight()) { content() }
+        Column(Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState())) { content() }
     }
 }
 
 @Composable
 private fun AccountSection(
-    m3u: String,
-    epg: String,
-    onM3u: (String) -> Unit,
-    onEpg: (String) -> Unit,
+    key: String,
+    account: Account,
+    isDefault: Boolean,
+    isNew: Boolean,
+    isActive: Boolean,
     epgOffsetMin: Int,
     onEpgOffset: (Int) -> Unit,
     epgLocalTime: Boolean,
     onEpgLocalTime: (Boolean) -> Unit,
-    onSave: () -> Unit,
+    onSave: (Account) -> Unit,
+    onDelete: () -> Unit,
 ) {
+    // Stan pól zależy od konta (key), więc przełączenie konta w nawigacji wczytuje jego wartości.
+    var name by remember(key, account.name) { mutableStateOf(account.name) }
+    var m3u by remember(key, account.m3u) { mutableStateOf(account.m3u) }
+    var epg by remember(key, account.epg) { mutableStateOf(account.epg) }
+
     Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
-        Text("Połącz z serwerem", style = MaterialTheme.typography.headlineLarge)
         Text(
-            "Logo kanałów i identyfikatory programu (tvg-id) są brane z playlisty M3U. " +
-                "EPG pobierany jest z osobnego adresu.",
+            when {
+                isNew -> "Nowe konto"
+                isDefault -> "Konto domyślne"
+                else -> account.name
+            },
+            style = MaterialTheme.typography.headlineLarge,
+        )
+        Text(
+            (if (isActive) "To konto jest teraz aktywne. " else "") +
+                "Logo kanałów i identyfikatory programu (tvg-id) są brane z playlisty M3U. " +
+                "EPG pobierany jest z osobnego adresu. Pola włączają się po kliknięciu.",
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        UrlField("Adres playlisty M3U", m3u, onM3u)
-        UrlField("Adres EPG (XMLTV, także .xml.gz), opcjonalnie", epg, onEpg)
+        if (!isDefault) {
+            UrlField("Nazwa konta", name, { name = it }, keyboardType = KeyboardType.Text, placeholder = "np. Dom, Działka")
+        }
+        UrlField("Adres playlisty M3U", m3u, { m3u = it })
+        UrlField("Adres EPG (XMLTV, także .xml.gz), opcjonalnie", epg, { epg = it })
+
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text("Strefa czasowa EPG", style = MaterialTheme.typography.labelLarge)
             Button(onClick = { onEpgLocalTime(!epgLocalTime) }) {
@@ -168,42 +216,22 @@ private fun AccountSection(
             }
             Text(
                 "Włącz, jeśli plik EPG ma błędną strefę po zmianie czasu: godziny są wtedy czytane jako czas lokalny " +
-                    "urządzenia, z automatyczną zmianą lato/zima. Zmiana pobiera EPG ponownie.",
+                    "urządzenia, z automatyczną zmianą lato/zima. Zmiana pobiera EPG ponownie. Dotyczy wszystkich kont.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
         EpgOffsetRow(epgOffsetMin, onEpgOffset)
-        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            Button(onClick = onSave, enabled = m3u.isNotBlank()) { Text("Zapisz i wczytaj kanały") }
-        }
-    }
-}
 
-@Composable
-private fun EpgOffsetRow(offsetMin: Int, onChange: (Int) -> Unit) {
-    val step = app.iptvtv.EPG_OFFSET_STEP_MIN
-    val label = when {
-        offsetMin == 0 -> "0 (bez korekty)"
-        else -> {
-            val a = kotlin.math.abs(offsetMin)
-            val t = if (a % 60 == 0) "${a / 60} h" else if (a < 60) "$a min" else "${a / 60} h ${a % 60} min"
-            (if (offsetMin > 0) "+" else "−") + t
+        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            Button(
+                onClick = {
+                    onSave(Account(account.id, if (isDefault) "Konto domyślne" else name.trim(), m3u, epg))
+                },
+                enabled = m3u.isNotBlank() && (isDefault || name.isNotBlank()),
+            ) { Text(if (isNew) "Dodaj i wczytaj kanały" else "Zapisz i wczytaj kanały") }
+            if (!isDefault && !isNew) Button(onClick = onDelete) { Text("Usuń konto") }
         }
-    }
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text("Korekta czasu EPG", style = MaterialTheme.typography.labelLarge)
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            Button(onClick = { onChange(-step) }) { Text("−") }
-            Text(label, style = MaterialTheme.typography.titleLarge, modifier = Modifier.widthIn(min = 160.dp))
-            Button(onClick = { onChange(step) }) { Text("+") }
-            if (offsetMin != 0) Button(onClick = { onChange(-offsetMin) }) { Text("Zeruj") }
-        }
-        Text(
-            "Jeśli program pokazuje się za późno (np. po zmianie czasu), ustaw −1 h; jeśli za wcześnie, +1 h. Działa od razu.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
     }
 }
 
@@ -280,6 +308,34 @@ private fun AppSection(
 }
 
 @Composable
+private fun EpgOffsetRow(offsetMin: Int, onChange: (Int) -> Unit) {
+    val step = app.iptvtv.EPG_OFFSET_STEP_MIN
+    val label = when {
+        offsetMin == 0 -> "0 (bez korekty)"
+        else -> {
+            val a = kotlin.math.abs(offsetMin)
+            val t = if (a % 60 == 0) "${a / 60} h" else if (a < 60) "$a min" else "${a / 60} h ${a % 60} min"
+            (if (offsetMin > 0) "+" else "−") + t
+        }
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text("Korekta czasu EPG", style = MaterialTheme.typography.labelLarge)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            Button(onClick = { onChange(-step) }) { Text("−") }
+            Text(label, style = MaterialTheme.typography.titleLarge, modifier = Modifier.widthIn(min = 160.dp))
+            Button(onClick = { onChange(step) }) { Text("+") }
+            if (offsetMin != 0) Button(onClick = { onChange(-offsetMin) }) { Text("Zeruj") }
+        }
+        Text(
+            "Jeśli program pokazuje się za późno (np. po zmianie czasu), ustaw −1 h; jeśli za wcześnie, +1 h. Działa od razu.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+
+@Composable
 private fun AboutSection(
     versionName: String,
     updatesEnabled: Boolean,
@@ -315,27 +371,66 @@ private fun AboutSection(
     }
 }
 
+@OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
-private fun UrlField(label: String, value: String, onChange: (String) -> Unit) {
-    var focused by remember { mutableStateOf(false) }
+private fun UrlField(
+    label: String,
+    value: String,
+    onChange: (String) -> Unit,
+    keyboardType: KeyboardType = KeyboardType.Uri,
+    placeholder: String = "Kliknij, aby wpisać",
+) {
+    // Pole tekstowe (i klawiatura) pojawia się dopiero po kliknięciu wiersza; najechanie kursorem nic nie otwiera.
+    var editing by remember { mutableStateOf(false) }
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(label, style = MaterialTheme.typography.labelLarge)
-        BasicTextField(
-            value = value,
-            onValueChange = onChange,
-            singleLine = true,
-            textStyle = TextStyle(color = MaterialTheme.colorScheme.onSurface, fontSize = 20.sp),
-            cursorBrush = SolidColor(MaterialTheme.colorScheme.onSurface),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
-            modifier = Modifier
-                .fillMaxWidth()
-                .onFocusChanged { focused = it.isFocused }
-                .border(
-                    if (focused) 3.dp else 1.dp,
-                    if (focused) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-                    RoundedCornerShape(8.dp),
+        if (!editing) {
+            Card(
+                onClick = { editing = true },
+                modifier = Modifier.fillMaxWidth(),
+                shape = CardDefaults.shape(RoundedCornerShape(10.dp)),
+                border = CardDefaults.border(
+                    border = Border(BorderStroke(1.dp, MaterialTheme.colorScheme.surfaceVariant), shape = RoundedCornerShape(10.dp)),
+                    focusedBorder = Border(BorderStroke(3.dp, MaterialTheme.colorScheme.primary), shape = RoundedCornerShape(10.dp)),
+                ),
+                colors = CardDefaults.colors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    focusedContainerColor = MaterialTheme.colorScheme.surface,
+                ),
+            ) {
+                Text(
+                    value.ifBlank { placeholder },
+                    modifier = Modifier.padding(16.dp),
+                    maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    style = TextStyle(fontSize = 20.sp),
+                    color = if (value.isBlank()) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
                 )
-                .padding(16.dp),
-        )
+            }
+        } else {
+            val fr = remember { FocusRequester() }
+            val keyboard = LocalSoftwareKeyboardController.current
+            var hadFocus by remember { mutableStateOf(false) }
+            BasicTextField(
+                value = value,
+                onValueChange = onChange,
+                singleLine = true,
+                textStyle = TextStyle(color = MaterialTheme.colorScheme.onSurface, fontSize = 20.sp),
+                cursorBrush = SolidColor(MaterialTheme.colorScheme.onSurface),
+                keyboardOptions = KeyboardOptions(keyboardType = keyboardType, imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = { editing = false }),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .focusRequester(fr)
+                    .onFocusChanged {
+                        if (it.isFocused) hadFocus = true else if (hadFocus) editing = false
+                    }
+                    .border(3.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(10.dp))
+                    .padding(16.dp),
+            )
+            LaunchedEffect(Unit) {
+                fr.requestFocus()
+                keyboard?.show()
+            }
+        }
     }
 }

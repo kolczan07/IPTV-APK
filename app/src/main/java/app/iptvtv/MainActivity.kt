@@ -65,7 +65,8 @@ private fun App(vm: MainViewModel) {
     val channels by vm.channels.collectAsStateWithLifecycle()
     val history by vm.history.collectAsStateWithLifecycle()
     val m3u by vm.m3uUrl.collectAsStateWithLifecycle()
-    val epgLink by vm.epgUrl.collectAsStateWithLifecycle()
+    val accounts by vm.accounts.collectAsStateWithLifecycle()
+    val activeId by vm.activeAccountId.collectAsStateWithLifecycle()
     val guide by vm.guide.collectAsStateWithLifecycle()
     val grid by vm.gridData.collectAsStateWithLifecycle()
 
@@ -76,7 +77,7 @@ private fun App(vm: MainViewModel) {
         when (vm.screen) {
             null -> Unit
             Screen.Setup -> SetupScreen(
-                initialM3u = m3u, initialEpg = epgLink,
+                accounts = accounts, activeAccountId = activeId,
                 canCancel = m3u.isNotBlank(),
                 versionName = vm.versionName,
                 updatesEnabled = vm.updatesEnabled,
@@ -92,7 +93,7 @@ private fun App(vm: MainViewModel) {
                 onEpgOffset = vm::adjustEpgOffset,
                 epgLocalTime = vm.epgLocalTime.collectAsStateWithLifecycle().value,
                 onEpgLocalTime = vm::setEpgLocalTime,
-                onSave = vm::save, onCancel = vm::backToList,
+                onSaveAccount = vm::saveAccount, onDeleteAccount = vm::deleteAccount, onCancel = vm::backToList,
             )
             Screen.List -> ChannelListScreen(
                 channels = channels, history = history, epg = guide, controller = vm.controller,

@@ -171,13 +171,31 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun save(m3u: String, epg: String) {
-        val m = m3u.trim()
-        val e = epg.trim()
+    val accounts = settings.accounts.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    val activeAccountId = settings.activeAccountId.stateIn(viewModelScope, SharingStarted.Eagerly, DEFAULT_ACCOUNT_ID)
+
+    /** Zapisuje (nowe lub zmienione) konto, robi je aktywnym i wczytuje jego kanały oraz EPG. */
+    fun saveAccount(acc: Account) {
+        val a = acc.copy(name = acc.name.trim(), m3u = acc.m3u.trim(), epg = acc.epg.trim())
         viewModelScope.launch {
-            settings.save(m, e)
+            val list = settings.accounts.first().toMutableList()
+            val i = list.indexOfFirst { it.id == a.id }
+            if (i >= 0) list[i] = a else list += a
+            settings.saveAccounts(list, a.id)
             screen = Screen.List
-            refresh(m, e, force = true)
+            refresh(a.m3u, a.epg, force = true)
+        }
+    }
+
+    /** Usuwa konto (domyślnego nie można usunąć); gdy było aktywne, wraca konto domyślne. */
+    fun deleteAccount(id: String) {
+        if (id == DEFAULT_ACCOUNT_ID) return
+        viewModelScope.launch {
+            val list = settings.accounts.first().filterNot { it.id == id }
+            val wasActive = settings.activeAccountId.first() == id
+            val active = if (wasActive) DEFAULT_ACCOUNT_ID else settings.activeAccountId.first()
+            settings.saveAccounts(list, active)
+            if (wasActive) list.firstOrNull { it.id == DEFAULT_ACCOUNT_ID }?.let { refresh(it.m3u, it.epg, force = true) }
         }
     }
 

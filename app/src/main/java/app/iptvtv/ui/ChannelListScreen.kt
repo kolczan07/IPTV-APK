@@ -1,6 +1,9 @@
 package app.iptvtv.ui
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -21,6 +24,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.window.Dialog
 import androidx.media3.ui.PlayerView
 import androidx.tv.material3.*
 import app.iptvtv.data.ChannelEntity
@@ -111,7 +115,7 @@ fun ChannelListScreen(
             LazyColumn(
                 mod,
                 state = listState,
-                verticalArrangement = Arrangement.spacedBy(3.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 itemsIndexed(shown, key = { _, c -> c.id }) { i, ch ->
                     ChannelRow(
@@ -128,17 +132,23 @@ fun ChannelListScreen(
         }
     }
 
+    var showGroups by remember { mutableStateOf(false) }
+    if (showGroups) {
+        GroupsDialog(groups, active, onPick = { selected = it; showGroups = false }, onDismiss = { showGroups = false })
+    }
+
     if (compact) {
         Column(Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Telewizja", style = MaterialTheme.typography.headlineSmall, color = Accent, modifier = Modifier.weight(1f))
-                Button(onClick = { onGuide(shown) }, modifier = Modifier.heightIn(min = TOUCH_MIN)) { Text("EPG") }
-                Spacer(Modifier.width(8.dp))
-                Button(onClick = onSettings, modifier = Modifier.heightIn(min = TOUCH_MIN)) { Text("Ustawienia") }
+                Text("Telewizja", style = MaterialTheme.typography.headlineSmall, color = Accent)
+                Text("  ·  $active", maxLines = 1, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f))
             }
-            Spacer(Modifier.height(8.dp))
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(groups) { g -> GroupButton(g, g == active, Modifier.heightIn(min = TOUCH_MIN)) { selected = g } }
+            Spacer(Modifier.height(6.dp))
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = { showGroups = true }, modifier = Modifier.heightIn(min = TOUCH_MIN)) { Text("Grupy kanałów") }
+                Button(onClick = { onGuide(shown) }, modifier = Modifier.heightIn(min = TOUCH_MIN)) { Text("EPG") }
+                Button(onClick = onSettings, modifier = Modifier.heightIn(min = TOUCH_MIN)) { Text("Ustawienia") }
             }
             Spacer(Modifier.height(8.dp))
             channelList(Modifier.weight(1f).fillMaxWidth())
@@ -146,33 +156,54 @@ fun ChannelListScreen(
         return
     }
 
-    Row(Modifier.fillMaxSize().padding(24.dp)) {
-        // kategorie i akcje
-        Column(Modifier.width(200.dp).fillMaxHeight()) {
+    Column(Modifier.fillMaxSize().padding(24.dp)) {
+        // pasek u góry: grupy ukryte w oknie, ustawienia są tuż pod ręką
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("Telewizja", style = MaterialTheme.typography.headlineMedium, color = Accent)
-            Spacer(Modifier.height(12.dp))
-            LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                items(groups) { g -> GroupButton(g, g == active, Modifier.fillMaxWidth()) { selected = g } }
-            }
-            Spacer(Modifier.height(8.dp))
-            Button(onClick = { onGuide(shown) }, modifier = Modifier.fillMaxWidth()) { Text("Przewodnik EPG") }
-            Spacer(Modifier.height(6.dp))
-            Button(onClick = onSettings, modifier = Modifier.fillMaxWidth()) { Text("Ustawienia") }
+            Text("·  $active", maxLines = 1, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+            Button(onClick = { showGroups = true }) { Text("Grupy kanałów") }
+            Button(onClick = { onGuide(shown) }) { Text("Przewodnik EPG") }
+            Button(onClick = onSettings) { Text("Ustawienia") }
         }
+        Spacer(Modifier.height(16.dp))
+        Row(Modifier.fillMaxWidth().weight(1f)) {
+            // lista kanałów
+            channelList(Modifier.weight(1f).fillMaxHeight())
 
-        Spacer(Modifier.width(20.dp))
+            Spacer(Modifier.width(24.dp))
 
-        // lista kanałów
-        channelList(Modifier.weight(1f).fillMaxHeight())
-
-        Spacer(Modifier.width(20.dp))
-
-        // panel podglądu
-        PreviewPane(controller, { focusedCh ?: controller.current }, epg, Modifier.width(320.dp).fillMaxHeight())
+            // panel podglądu
+            PreviewPane(controller, { focusedCh ?: controller.current }, epg, Modifier.width(340.dp).fillMaxHeight())
+        }
     }
 }
 
 private val TOUCH_MIN = 48.dp
+
+@Composable
+private fun GroupsDialog(groups: List<String>, active: String, onPick: (String) -> Unit, onDismiss: () -> Unit) {
+    Dialog(onDismissRequest = onDismiss) {
+        val first = remember { FocusRequester() }
+        Column(
+            Modifier.width(380.dp).heightIn(max = 520.dp)
+                .background(Panel, RoundedCornerShape(20.dp)).padding(20.dp),
+        ) {
+            Text("Grupy kanałów", style = MaterialTheme.typography.headlineSmall)
+            Spacer(Modifier.height(12.dp))
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                items(groups) { g ->
+                    GroupButton(
+                        g, g == active,
+                        Modifier.fillMaxWidth().heightIn(min = TOUCH_MIN)
+                            .then(if (g == active) Modifier.focusRequester(first) else Modifier),
+                    ) { onPick(g) }
+                }
+            }
+        }
+        LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
+    }
+}
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
@@ -251,26 +282,38 @@ private fun ChannelRow(
     onLongClick: () -> Unit,
 ) {
     val cur = epg.nowNext(ch).first
+    val shape = RoundedCornerShape(16.dp)
     Card(
         onClick = onClick, onLongClick = onLongClick, modifier = modifier.fillMaxWidth(),
+        shape = CardDefaults.shape(shape),
+        border = CardDefaults.border(
+            border = Border(BorderStroke(if (playing) 1.5.dp else 0.dp, if (playing) Accent else Color.Transparent), shape = shape),
+            focusedBorder = Border(BorderStroke(2.5.dp, Accent), shape = shape),
+        ),
+        scale = CardDefaults.scale(focusedScale = 1.02f),
         colors = CardDefaults.colors(
-            containerColor = if (playing) PanelHi else Panel,
+            containerColor = Panel,
             focusedContainerColor = FocusBg,
         ),
     ) {
-        Row(Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.width(3.dp).height(36.dp).background(if (playing) Accent else Color.Transparent))
-            Spacer(Modifier.width(9.dp))
-            AsyncImage(
-                model = ch.logo, contentDescription = null,
-                modifier = Modifier.size(width = 56.dp, height = 36.dp),
-                contentScale = ContentScale.Fit,
-            )
-            Spacer(Modifier.width(10.dp))
+        Row(Modifier.padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            // logo w zaokrąglonym kafelku
+            Box(
+                Modifier.size(width = 68.dp, height = 44.dp).clip(RoundedCornerShape(12.dp)).background(PanelHi),
+                contentAlignment = Alignment.Center,
+            ) {
+                AsyncImage(
+                    model = ch.logo, contentDescription = null,
+                    modifier = Modifier.fillMaxSize().padding(5.dp),
+                    contentScale = ContentScale.Fit,
+                )
+            }
+            Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (ch.number != null) {
-                        Text("${ch.number}  ", color = Accent, style = MaterialTheme.typography.titleSmall)
+                        Text("${ch.number}", color = Accent, style = MaterialTheme.typography.labelLarge,
+                            modifier = Modifier.padding(end = 8.dp))
                     }
                     Text(ch.name, maxLines = 1, style = MaterialTheme.typography.titleSmall,
                         color = MaterialTheme.colorScheme.onSurface,
@@ -280,11 +323,11 @@ private fun ChannelRow(
                     Text("${clock(cur.start)}  ${cur.title}", maxLines = 1,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    ProgressLine(progressOf(cur, epg.now), Modifier.padding(top = 4.dp))
+                    ProgressLine(progressOf(cur, epg.now), Modifier.padding(top = 6.dp))
                 }
             }
-            if (playing) Text(" ▶", color = MaterialTheme.colorScheme.primary)
-            if (ch.favorite) Text(" ★", color = MaterialTheme.colorScheme.primary)
+            if (ch.favorite) Text("  ★", color = Accent)
+            if (playing) Text("  ▶", color = Accent)
         }
     }
 }
