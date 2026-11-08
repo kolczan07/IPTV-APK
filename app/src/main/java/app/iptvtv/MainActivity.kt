@@ -8,6 +8,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -48,7 +49,10 @@ private fun App(vm: MainViewModel) {
     val guide by vm.guide.collectAsStateWithLifecycle()
     val grid by vm.gridData.collectAsStateWithLifecycle()
 
-    Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+    // Na telefonach (edge-to-edge od Androida 15) omijamy paski systemowe i klawiaturę;
+    // odtwarzacz zostaje pełnoekranowy. Na TV insety są zerowe.
+    val insets = if (vm.screen == Screen.Player) Modifier else Modifier.safeDrawingPadding()
+    Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).then(insets)) {
         when (vm.screen) {
             null -> Unit
             Screen.Setup -> SetupScreen(

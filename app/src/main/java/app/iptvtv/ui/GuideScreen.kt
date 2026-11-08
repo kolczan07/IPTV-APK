@@ -11,6 +11,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Card
@@ -26,7 +27,7 @@ import kotlinx.coroutines.delay
 private const val SLOT_MS = 30 * 60_000L
 private const val SLOTS = 16                       // 8 godzin
 private const val DP_PER_MIN = 5f                  // 30 min = 150 dp
-private val CHANNEL_W = 220.dp
+private const val COMPACT_DP = 720
 private val ROW_H = 56.dp
 
 private fun dpFor(ms: Long): Dp = (ms / 60_000f * DP_PER_MIN).dp
@@ -47,15 +48,17 @@ fun GuideScreen(
     val t0 = remember { System.currentTimeMillis() / SLOT_MS * SLOT_MS - SLOT_MS }
     val t1 = t0 + SLOT_MS * SLOTS
 
+    val compact = LocalConfiguration.current.screenWidthDp < COMPACT_DP
+    val channelW = if (compact) 96.dp else 220.dp
     val hScroll = rememberScrollState()
     var focused by remember { mutableStateOf<ProgrammeEntity?>(null) }
 
-    Column(Modifier.fillMaxSize().padding(horizontal = 32.dp, vertical = 24.dp)) {
+    Column(Modifier.fillMaxSize().padding(horizontal = if (compact) 8.dp else 32.dp, vertical = if (compact) 8.dp else 24.dp)) {
         // Szczegóły programu pod fokusem
-        Column(Modifier.fillMaxWidth().height(96.dp)) {
+        Column(Modifier.fillMaxWidth().height(if (compact) 72.dp else 96.dp)) {
             val f = focused
             if (f == null) {
-                Text("Wybierz program, aby zobaczyć szczegóły. OK odtwarza kanał.",
+                Text("Wybierz program, aby zobaczyć szczegóły. Dotknięcie lub OK odtwarza kanał.",
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
             } else {
                 Text("${clock(f.start)}–${clock(f.stop)}  ${f.title}", maxLines = 1,
@@ -69,7 +72,7 @@ fun GuideScreen(
 
         // Oś czasu
         Row(Modifier.fillMaxWidth()) {
-            Spacer(Modifier.width(CHANNEL_W + 6.dp))
+            Spacer(Modifier.width(channelW + 6.dp))
             Row(Modifier.weight(1f).horizontalScroll(hScroll, enabled = false)) {
                 Row(Modifier.width(TOTAL_W)) {
                     repeat(SLOTS) { i ->
@@ -87,7 +90,7 @@ fun GuideScreen(
             itemsIndexed(channels, key = { _, c -> c.id }) { index, ch ->
                 val list = ch.tvgId?.trim()?.lowercase()?.let { byChannel[it] }
                 Row(Modifier.fillMaxWidth().height(ROW_H)) {
-                    ChannelHeader(ch, onClick = { onPlay(index) })
+                    ChannelHeader(ch, channelW, compact, onClick = { onPlay(index) })
                     Row(Modifier.weight(1f).fillMaxHeight().horizontalScroll(hScroll)) {
                         ProgrammeCells(list, t0, t1, now, onFocus = { focused = it }, onClick = { onPlay(index) })
                     }
@@ -99,15 +102,17 @@ fun GuideScreen(
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
-private fun ChannelHeader(ch: ChannelEntity, onClick: () -> Unit) {
-    Card(onClick = onClick, modifier = Modifier.width(CHANNEL_W).fillMaxHeight().padding(end = 6.dp)) {
-        Row(Modifier.fillMaxSize().padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-            AsyncImage(
-                model = ch.logo, contentDescription = null,
-                modifier = Modifier.size(width = 48.dp, height = 30.dp), contentScale = ContentScale.Fit,
-            )
-            Spacer(Modifier.width(10.dp))
-            Text(ch.name, maxLines = 1, style = MaterialTheme.typography.bodyMedium)
+private fun ChannelHeader(ch: ChannelEntity, width: Dp, compact: Boolean, onClick: () -> Unit) {
+    Card(onClick = onClick, modifier = Modifier.width(width).fillMaxHeight().padding(end = 6.dp)) {
+        Row(Modifier.fillMaxSize().padding(horizontal = if (compact) 6.dp else 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (!compact) {
+                AsyncImage(
+                    model = ch.logo, contentDescription = null,
+                    modifier = Modifier.size(width = 48.dp, height = 30.dp), contentScale = ContentScale.Fit,
+                )
+                Spacer(Modifier.width(10.dp))
+            }
+            Text(ch.name, maxLines = if (compact) 2 else 1, style = MaterialTheme.typography.bodyMedium)
         }
     }
 }

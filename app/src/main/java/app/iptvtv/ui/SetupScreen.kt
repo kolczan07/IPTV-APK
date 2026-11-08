@@ -2,6 +2,9 @@ package app.iptvtv.ui
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.border
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -13,6 +16,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextStyle
@@ -46,6 +50,46 @@ fun SetupScreen(
     var section by rememberSaveable { mutableStateOf(Section.Account) }
     BackHandler(enabled = canCancel, onBack = onCancel)
 
+    val content: @Composable () -> Unit = {
+        when (section) {
+            Section.Account -> AccountSection(
+                m3u = m3u, epg = epg,
+                onM3u = { m3u = it }, onEpg = { epg = it },
+                onSave = { onSave(m3u, epg) },
+            )
+            Section.About -> AboutSection(
+                versionName = versionName,
+                updatesEnabled = updatesEnabled,
+                updateText = updateText,
+                onCheckUpdate = onCheckUpdate,
+            )
+        }
+    }
+
+    // Wąski ekran (telefon w pionie): sekcje jako rząd przycisków u góry, treść przewijana.
+    if (LocalConfiguration.current.screenWidthDp < 720) {
+        Column(Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState())) {
+            Text("Ustawienia", style = MaterialTheme.typography.headlineMedium)
+            Spacer(Modifier.height(12.dp))
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Section.entries.forEach { s ->
+                    Button(
+                        onClick = { section = s },
+                        modifier = Modifier.heightIn(min = 48.dp),
+                        colors = ButtonDefaults.colors(
+                            containerColor = if (s == section) MaterialTheme.colorScheme.surfaceVariant
+                            else MaterialTheme.colorScheme.surface,
+                        ),
+                    ) { Text(s.label, maxLines = 1) }
+                }
+                if (canCancel) Button(onClick = onCancel, modifier = Modifier.heightIn(min = 48.dp)) { Text("Anuluj") }
+            }
+            Spacer(Modifier.height(16.dp))
+            content()
+        }
+        return
+    }
+
     Row(Modifier.fillMaxSize().padding(horizontal = 48.dp, vertical = 32.dp)) {
         // Lewa kolumna: nawigacja między sekcjami
         Column(Modifier.width(240.dp).fillMaxHeight()) {
@@ -72,21 +116,7 @@ fun SetupScreen(
         Spacer(Modifier.width(32.dp))
 
         // Prawa kolumna: zawartość wybranej sekcji
-        Column(Modifier.weight(1f).fillMaxHeight()) {
-            when (section) {
-                Section.Account -> AccountSection(
-                    m3u = m3u, epg = epg,
-                    onM3u = { m3u = it }, onEpg = { epg = it },
-                    onSave = { onSave(m3u, epg) },
-                )
-                Section.About -> AboutSection(
-                    versionName = versionName,
-                    updatesEnabled = updatesEnabled,
-                    updateText = updateText,
-                    onCheckUpdate = onCheckUpdate,
-                )
-            }
-        }
+        Column(Modifier.weight(1f).fillMaxHeight()) { content() }
     }
 }
 

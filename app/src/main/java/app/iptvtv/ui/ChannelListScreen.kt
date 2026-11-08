@@ -3,6 +3,7 @@ package app.iptvtv.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -17,6 +18,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.ui.PlayerView
@@ -30,6 +32,7 @@ import kotlinx.coroutines.delay
 private const val ALL = "Wszystkie"
 private const val FAV = "★ Ulubione"
 private const val HIST = "Ostatnio oglądane"
+private const val COMPACT_DP = 720
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
@@ -47,6 +50,8 @@ fun ChannelListScreen(
     onSettings: () -> Unit,
     onGuide: (List<ChannelEntity>) -> Unit,
 ) {
+    // Wąski ekran (telefon w pionie): jedna kolumna, bez panelu podglądu.
+    val compact = LocalConfiguration.current.screenWidthDp < COMPACT_DP
     var selected by rememberSaveable { mutableStateOf(ALL) }
     val hist = history.orEmpty()
     val groups = remember(channels, hist.isNotEmpty()) {
@@ -87,43 +92,19 @@ fun ChannelListScreen(
     var focusedCh by remember { mutableStateOf<ChannelEntity?>(null) }
     LaunchedEffect(focusedCh?.url) {
         val c = focusedCh ?: return@LaunchedEffect
+        if (compact) return@LaunchedEffect
         delay(1000)
         onPreview(c)
     }
 
-    Row(Modifier.fillMaxSize().padding(24.dp)) {
-        // kategorie i akcje
-        Column(Modifier.width(200.dp).fillMaxHeight()) {
-            Text("IPTV", style = MaterialTheme.typography.headlineMedium)
-            Spacer(Modifier.height(12.dp))
-            LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                items(groups) { g ->
-                    Button(
-                        onClick = { selected = g },
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.colors(
-                            containerColor = if (g == active) MaterialTheme.colorScheme.surfaceVariant
-                            else MaterialTheme.colorScheme.surface,
-                        ),
-                    ) { Text(g, maxLines = 1) }
-                }
-            }
-            Spacer(Modifier.height(8.dp))
-Button(onClick = { onGuide(shown) }, modifier = Modifier.fillMaxWidth()) { Text("Przewodnik EPG") }
-Spacer(Modifier.height(6.dp))
-Button(onClick = onSettings, modifier = Modifier.fillMaxWidth()) { Text("Ustawienia") }
-        }
-
-        Spacer(Modifier.width(20.dp))
-
-        // lista kanałów
+    val channelList: @Composable (Modifier) -> Unit = { mod ->
         if (shown.isEmpty()) {
-            Box(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.Center) {
+            Box(mod, contentAlignment = Alignment.Center) {
                 Text(if (loading) "Wczytywanie kanałów…" else "Brak kanałów w tej grupie")
             }
         } else {
             LazyColumn(
-                Modifier.weight(1f).fillMaxHeight(),
+                mod,
                 state = listState,
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
@@ -140,12 +121,65 @@ Button(onClick = onSettings, modifier = Modifier.fillMaxWidth()) { Text("Ustawie
                 }
             }
         }
+    }
+
+    if (compact) {
+        Column(Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("IPTV", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
+                Button(onClick = { onGuide(shown) }, modifier = Modifier.heightIn(min = TOUCH_MIN)) { Text("EPG") }
+                Spacer(Modifier.width(8.dp))
+                Button(onClick = onSettings, modifier = Modifier.heightIn(min = TOUCH_MIN)) { Text("Ustawienia") }
+            }
+            Spacer(Modifier.height(8.dp))
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(groups) { g -> GroupButton(g, g == active, Modifier.heightIn(min = TOUCH_MIN)) { selected = g } }
+            }
+            Spacer(Modifier.height(8.dp))
+            channelList(Modifier.weight(1f).fillMaxWidth())
+        }
+        return
+    }
+
+    Row(Modifier.fillMaxSize().padding(24.dp)) {
+        // kategorie i akcje
+        Column(Modifier.width(200.dp).fillMaxHeight()) {
+            Text("IPTV", style = MaterialTheme.typography.headlineMedium)
+            Spacer(Modifier.height(12.dp))
+            LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                items(groups) { g -> GroupButton(g, g == active, Modifier.fillMaxWidth()) { selected = g } }
+            }
+            Spacer(Modifier.height(8.dp))
+            Button(onClick = { onGuide(shown) }, modifier = Modifier.fillMaxWidth()) { Text("Przewodnik EPG") }
+            Spacer(Modifier.height(6.dp))
+            Button(onClick = onSettings, modifier = Modifier.fillMaxWidth()) { Text("Ustawienia") }
+        }
+
+        Spacer(Modifier.width(20.dp))
+
+        // lista kanałów
+        channelList(Modifier.weight(1f).fillMaxHeight())
 
         Spacer(Modifier.width(20.dp))
 
         // panel podglądu
         PreviewPane(controller, focusedCh ?: controller.current, epg, Modifier.width(320.dp).fillMaxHeight())
     }
+}
+
+private val TOUCH_MIN = 48.dp
+
+@OptIn(ExperimentalTvMaterial3Api::class)
+@Composable
+private fun GroupButton(group: String, active: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    Button(
+        onClick = onClick,
+        modifier = modifier,
+        colors = ButtonDefaults.colors(
+            containerColor = if (active) MaterialTheme.colorScheme.surfaceVariant
+            else MaterialTheme.colorScheme.surface,
+        ),
+    ) { Text(group, maxLines = 1) }
 }
 
 @Composable
