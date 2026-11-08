@@ -81,6 +81,10 @@ class PlayerController(context: Context) {
         private set
 
     private val main = Handler(Looper.getMainLooper())
+    private val wd = Handler(Looper.getMainLooper())   // stróż zawieszonego strumienia
+    private var recoveries = 0
+    private var stuckTicks = 0
+    private var lastFrames = -1L
     private var retries = 0
     private var httpStatus: Int? = null
 
@@ -96,6 +100,7 @@ class PlayerController(context: Context) {
     }
 
     init {
+        wd.postDelayed(watchdog, 2000)
         player.addListener(object : Player.Listener {
             override fun onPlayerError(e: PlaybackException) {
                 val url = current?.url
@@ -136,6 +141,43 @@ class PlayerController(context: Context) {
         })
     }
 
+    /**
+     * Co 2 s sprawdza, czy strumień naprawdę idzie: w stanie READY muszą przybywać wyrenderowane klatki,
+     * a buforowanie nie może trwać w nieskończoność. Po ~10 s bez postępu restartujemy kanał
+     * (typowe zawieszenia po szybkim przełączaniu: obraz stoi przy działającym dźwięku albo wieczne kółko).
+     */
+    private val watchdog = object : Runnable {
+        override fun run() {
+            tick()
+            wd.postDelayed(this, 2000)
+        }
+    }
+
+    private fun tick() {
+        val url = current?.url
+        if (url == null || error != null || !player.playWhenReady) { stuckTicks = 0; lastFrames = -1; return }
+        val frames = player.videoDecoderCounters?.let { it.ensureUpdated(); it.renderedOutputBufferCount.toLong() } ?: -1L
+        val hasVideo = player.currentTracks.isTypeSelected(C.TRACK_TYPE_VIDEO)
+        val progressing = player.playbackState == Player.STATE_READY && (!hasVideo || frames != lastFrames)
+        lastFrames = frames
+        if (progressing) { stuckTicks = 0; return }
+        if (++stuckTicks < STUCK_TICKS) return
+        stuckTicks = 0
+        recover(url)
+    }
+
+    private fun recover(url: String) {
+        if (recoveries >= MAX_RECOVERIES) {
+            error = "Strumień nie odpowiada (brak postępu przez ${STUCK_TICKS * 2} s)"
+            return
+        }
+        recoveries++
+        lastFrames = -1
+        tried.clear()
+        player.stop()
+        load(url, learned[url] ?: initialAttempt(url))
+    }
+
     /** Ostrzega o dźwięku dopiero gdy strumień już gra (READY), a żaden dekoder audio nie został wybrany. */
     private fun updateAudioInfo() {
         if (player.playbackState != Player.STATE_READY) { audioInfo = null; return }
@@ -174,6 +216,9 @@ class PlayerController(context: Context) {
         firstError = null
         httpStatus = null
         retries = 0
+        recoveries = 0
+        stuckTicks = 0
+        lastFrames = -1
         main.removeCallbacksAndMessages(null)
         tried.clear()
         load(ch.url, learned[ch.url] ?: initialAttempt(ch.url))
@@ -192,6 +237,7 @@ class PlayerController(context: Context) {
 
     fun release() {
         main.removeCallbacksAndMessages(null)
+        wd.removeCallbacksAndMessages(null)
         player.release()
     }
 
@@ -200,6 +246,8 @@ class PlayerController(context: Context) {
         const val HLS = 1
         const val PS = 2
         const val MAX_RETRIES = 3
+        const val MAX_RECOVERIES = 3
+        const val STUCK_TICKS = 5   // 5 x 2 s
         val RETRYABLE = setOf(
             PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW,
             PlaybackException.ERROR_CODE_IO_UNSPECIFIED,
