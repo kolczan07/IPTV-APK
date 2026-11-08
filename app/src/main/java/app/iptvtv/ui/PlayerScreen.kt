@@ -46,7 +46,13 @@ fun PlayerScreen(
     val channel = queue[index]
 
     // Ten sam odtwarzacz co w podglądzie: jeśli kanał już gra, nic się nie przeładowuje.
-    LaunchedEffect(channel.url) { onTune(channel) }
+    // Przy szybkim przełączaniu (▲▼) czekamy chwilę na ostatni wybór, żeby nie zasypywać serwera
+    // (tuner/limit strumieni) żądaniami o kanały, które i tak zaraz miną.
+    LaunchedEffect(channel.url) {
+        val cur = controller.current?.url
+        if (cur != null && cur != channel.url) delay(250)
+        onTune(channel)
+    }
     LaunchedEffect(channel.url, overlay) {
         if (overlay) { delay(5000); overlay = false }
     }

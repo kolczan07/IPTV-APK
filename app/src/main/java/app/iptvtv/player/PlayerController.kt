@@ -120,7 +120,7 @@ class PlayerController(context: Context) {
                             tried.clear()
                             load(url, learned[url] ?: initialAttempt(url))
                         }
-                    }, 1500L * retries)
+                    }, 800L * retries)
                     return
                 }
                 error = "Błąd odtwarzania ($firstError; próby: ${tried.sorted()}; ostatni: ${e.errorCodeName}" +
