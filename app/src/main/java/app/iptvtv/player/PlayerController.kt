@@ -112,6 +112,7 @@ class PlayerController(context: Context) {
     private var ttffMs: Long? = null
     private var droppedFrames = 0
     private var videoDecoder: String? = null
+    private var lastErrorName: String? = null
     private var audioDecoder: String? = null
 
     private val main = Handler(Looper.getMainLooper())
@@ -144,25 +145,29 @@ class PlayerController(context: Context) {
                 if (firstError == null) firstError = e.errorCodeName
                 (e.cause as? HttpDataSource.InvalidResponseCodeException)?.let { httpStatus = it.responseCode }
                 val code = e.errorCode
-                // 3001..3004 = błędy parsowania kontenera / manifestu; 2000 = nieokreślony IO
-                // (np. wymuszony extractor na złym formacie) -> przejdź przez pozostałe tryby.
-                if (url != null && (code in 3001..3004 || code == PlaybackException.ERROR_CODE_IO_UNSPECIFIED)) {
+                lastErrorName = e.errorCodeName
+                val enigma = url != null && initialAttempt(url) == TS
+                // Strumień z tunera Enigmy to zawsze MPEG-TS: zmiana trybu niczego nie naprawia, a każde nowe
+                // otwarcie obciąża tuner. Tam tylko ponawiamy (niżej). Dla innych źródeł: 3001..3004 = błędy
+                // parsowania, 2000 = nieokreślony IO -> przechodzimy przez pozostałe tryby.
+                if (!enigma && url != null && (code in 3001..3004 || code == PlaybackException.ERROR_CODE_IO_UNSPECIFIED)) {
                     val next = listOf(TS, AUTO, HLS, PS).firstOrNull { it !in tried }
                     if (next != null) {
                         load(url, next)
                         return
                     }
                 }
-                // Błędy przejściowe (sieć, limit połączeń u dostawcy, zajęty dekoder, okno live):
-                // do 3 ponowień z rosnącą przerwą, zanim pokażemy błąd.
-                if (url != null && code in RETRYABLE && retries < MAX_RETRIES) {
+                // Błędy przejściowe (sieć, limit połączeń, zajęty dekoder, tuner jeszcze się stroi):
+                // ponowienia z rosnącą przerwą, zanim pokażemy błąd.
+                val maxRetries = if (enigma) ENIGMA_RETRIES else MAX_RETRIES
+                if (url != null && code in RETRYABLE && retries < maxRetries) {
                     retries++
                     main.postDelayed({
                         if (current?.url == url && error == null) {
                             tried.clear()
                             load(url, learned[url] ?: initialAttempt(url))
                         }
-                    }, 800L * retries)
+                    }, (if (enigma) 1200L else 800L) * retries)
                     return
                 }
                 error = "Błąd odtwarzania ($firstError; próby: ${tried.sorted()}; ostatni: ${e.errorCodeName}" +
@@ -205,7 +210,8 @@ class PlayerController(context: Context) {
         val audio = a?.let { "${it.sampleMimeType?.substringAfter('/')} ${it.channelCount}ch" } ?: "brak"
         return "$mode · $st · V: $video [${videoDecoder ?: "—"}] · A: $audio [${audioDecoder ?: "—"}]" +
             " · 1. klatka: ${ttffMs?.let { "$it ms" } ?: "—"} · pominięte: $droppedFrames" +
-            " · bufor: ${player.totalBufferedDuration / 1000}s"
+            " · bufor: ${player.totalBufferedDuration / 1000}s" +
+            (lastErrorName?.let { " · ost. błąd: $it (${retries}x)" } ?: "")
     }
 
     init {
@@ -274,7 +280,7 @@ class PlayerController(context: Context) {
 
     private fun load(url: String, mode: Int) {
         loadStartMs = SystemClock.elapsedRealtime()
-        ttffMs = null; droppedFrames = 0; videoDecoder = null; audioDecoder = null
+        ttffMs = null; droppedFrames = 0
         audioInfo = null
         attempt = mode
         tried += mode
@@ -302,6 +308,7 @@ class PlayerController(context: Context) {
         httpStatus = null
         retries = 0
         recoveries = 0
+        lastErrorName = null
         stuckTicks = 0
         lastFrames = -1
         main.removeCallbacksAndMessages(null)
@@ -333,6 +340,7 @@ class PlayerController(context: Context) {
         const val TS = 3
         val ENIGMA_REF = Regex("""/\d+:\d+:[0-9a-f]+:[0-9a-f]+:""")
         const val MAX_RETRIES = 3
+        const val ENIGMA_RETRIES = 4
         const val MAX_RECOVERIES = 3
         const val STUCK_TICKS = 5      // 5 x 2 s po starcie
         const val STARTUP_TICKS = 15   // 15 x 2 s do pierwszej klatki
