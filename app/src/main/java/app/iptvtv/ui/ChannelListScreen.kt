@@ -39,6 +39,9 @@ private const val FAV = "★ Ulubione"
 private const val HIST = "Ostatnio oglądane"
 private const val COMPACT_DP = 720
 
+/** Podgląd w miniTV startuje dopiero po tylu ms od zatrzymania kursora na kanale (przewijanie nie przestraja tunera). */
+private const val PREVIEW_DELAY_MS = 1750L
+
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 fun ChannelListScreen(
@@ -101,7 +104,7 @@ fun ChannelListScreen(
     LaunchedEffect(Unit) {
         snapshotFlow { focusedCh }.collectLatest { c ->
             if (c == null || isCompact) return@collectLatest
-            delay(1000)
+            delay(PREVIEW_DELAY_MS)
             previewCb(c)
         }
     }
