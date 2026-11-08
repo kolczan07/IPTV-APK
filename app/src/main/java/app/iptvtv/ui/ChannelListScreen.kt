@@ -28,6 +28,7 @@ import app.iptvtv.data.EpgSnapshot
 import app.iptvtv.player.PlayerController
 import coil.compose.AsyncImage
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 
 private const val ALL = "Wszystkie"
 private const val FAV = "★ Ulubione"
@@ -90,11 +91,15 @@ fun ChannelListScreen(
 
     // --- podgląd: kanał pod fokusem startuje po krótkim opóźnieniu ---
     var focusedCh by remember { mutableStateOf<ChannelEntity?>(null) }
-    LaunchedEffect(focusedCh?.url) {
-        val c = focusedCh ?: return@LaunchedEffect
-        if (compact) return@LaunchedEffect
-        delay(1000)
-        onPreview(c)
+    // Stan fokusu jest czytany tylko tu (snapshotFlow) i w PreviewPane, żeby krok kursora nie przerysowywał całej listy.
+    val previewCb by rememberUpdatedState(onPreview)
+    val isCompact by rememberUpdatedState(compact)
+    LaunchedEffect(Unit) {
+        snapshotFlow { focusedCh }.collectLatest { c ->
+            if (c == null || isCompact) return@collectLatest
+            delay(1000)
+            previewCb(c)
+        }
     }
 
     val channelList: @Composable (Modifier) -> Unit = { mod ->
@@ -163,7 +168,7 @@ fun ChannelListScreen(
         Spacer(Modifier.width(20.dp))
 
         // panel podglądu
-        PreviewPane(controller, focusedCh ?: controller.current, epg, Modifier.width(320.dp).fillMaxHeight())
+        PreviewPane(controller, { focusedCh ?: controller.current }, epg, Modifier.width(320.dp).fillMaxHeight())
     }
 }
 
@@ -185,7 +190,8 @@ private fun GroupButton(group: String, active: Boolean, modifier: Modifier, onCl
 }
 
 @Composable
-private fun PreviewPane(controller: PlayerController, ch: ChannelEntity?, epg: EpgSnapshot, modifier: Modifier) {
+private fun PreviewPane(controller: PlayerController, chProvider: () -> ChannelEntity?, epg: EpgSnapshot, modifier: Modifier) {
+    val ch = chProvider()
     Column(modifier) {
         Box(
             Modifier.fillMaxWidth().aspectRatio(16f / 9f)
