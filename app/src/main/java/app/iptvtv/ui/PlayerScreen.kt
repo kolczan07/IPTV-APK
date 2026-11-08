@@ -86,6 +86,7 @@ fun PlayerScreen(
                 PlayerView(ctx).apply {
                     useController = false
                     isFocusable = false
+                    setKeepContentOnPlayerReset(true)
                     setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)
                     player = controller.player
                 }

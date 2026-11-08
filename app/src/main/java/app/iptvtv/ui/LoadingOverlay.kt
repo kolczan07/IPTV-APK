@@ -16,7 +16,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextAlign
@@ -27,7 +26,7 @@ import app.iptvtv.data.ChannelEntity
 import coil.compose.AsyncImage
 
 /**
- * Ekran ładowania zamiast kręcącego się kółka: logo i nazwa kanału na ciemnym tle z cienkim, płynnym paskiem.
+ * Ekran ładowania zamiast kręcącego się kółka: logo i nazwa kanału na przyciemnionej ostatniej klatce poprzedniego kanału, z cienkim paskiem.
  * Znika łagodnym zanikiem (crossfade) w chwili, gdy pojawi się pierwsza klatka obrazu.
  */
 @Composable
@@ -44,7 +43,7 @@ fun LoadingOverlay(
         exit = fadeOut(tween(350)),
     ) {
         Box(
-            Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Ink, Panel))),
+            Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.6f)), // przyciemnia ostatnią klatkę poprzedniego kanału
             contentAlignment = Alignment.Center,
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(if (small) 6.dp else 14.dp)) {

@@ -203,6 +203,7 @@ private fun PreviewPane(controller: PlayerController, chProvider: () -> ChannelE
                     PlayerView(ctx).apply {
                         useController = false
                         isFocusable = false
+                        setKeepContentOnPlayerReset(true)
                         player = controller.player
                     }
                 },
