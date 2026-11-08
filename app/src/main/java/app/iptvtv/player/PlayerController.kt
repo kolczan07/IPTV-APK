@@ -3,6 +3,7 @@ package app.iptvtv.player
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -17,6 +18,7 @@ import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.datasource.HttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
+import androidx.media3.exoplayer.analytics.AnalyticsListener
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
@@ -87,6 +89,15 @@ class PlayerController(context: Context) {
     /** Ostrzeżenie o dźwięku (brak ścieżki / brak dekodera w urządzeniu); null = dźwięk gra albo jeszcze nie wiadomo. */
     var audioInfo by mutableStateOf<String?>(null)
         private set
+
+    /** Jednowierszowa diagnostyka strumienia (format, dekodery, czas do 1. klatki, pominięte klatki). */
+    var diag by mutableStateOf("")
+        private set
+    private var loadStartMs = 0L
+    private var ttffMs: Long? = null
+    private var droppedFrames = 0
+    private var videoDecoder: String? = null
+    private var audioDecoder: String? = null
 
     private val main = Handler(Looper.getMainLooper())
     private val wd = Handler(Looper.getMainLooper())   // stróż zawieszonego strumienia
@@ -160,7 +171,48 @@ class PlayerController(context: Context) {
         }
     }
 
+    private fun buildDiag(): String {
+        val v = player.videoFormat
+        val a = player.audioFormat
+        val mode = when (attempt) { HLS -> "HLS"; PS -> "PS"; else -> "AUTO" }
+        val st = when (player.playbackState) {
+            Player.STATE_IDLE -> "IDLE"; Player.STATE_BUFFERING -> "BUFOR"
+            Player.STATE_READY -> "GRA"; Player.STATE_ENDED -> "KONIEC"; else -> "?"
+        }
+        val video = v?.let {
+            "${it.sampleMimeType?.substringAfter('/')} ${it.width}x${it.height}" +
+                (if (it.frameRate > 0) "@${it.frameRate.toInt()}" else "")
+        } ?: "brak"
+        val audio = a?.let { "${it.sampleMimeType?.substringAfter('/')} ${it.channelCount}ch" } ?: "brak"
+        return "$mode · $st · V: $video [${videoDecoder ?: "—"}] · A: $audio [${audioDecoder ?: "—"}]" +
+            " · 1. klatka: ${ttffMs?.let { "$it ms" } ?: "—"} · pominięte: $droppedFrames" +
+            " · bufor: ${player.totalBufferedDuration / 1000}s"
+    }
+
+    init {
+        player.addAnalyticsListener(object : AnalyticsListener {
+            override fun onVideoDecoderInitialized(
+                eventTime: AnalyticsListener.EventTime, decoderName: String,
+                initializedTimestampMs: Long, initializationDurationMs: Long,
+            ) { videoDecoder = decoderName }
+
+            override fun onAudioDecoderInitialized(
+                eventTime: AnalyticsListener.EventTime, decoderName: String,
+                initializedTimestampMs: Long, initializationDurationMs: Long,
+            ) { audioDecoder = decoderName }
+
+            override fun onDroppedVideoFrames(eventTime: AnalyticsListener.EventTime, droppedFrames: Int, elapsedMs: Long) {
+                this@PlayerController.droppedFrames += droppedFrames
+            }
+
+            override fun onRenderedFirstFrame(eventTime: AnalyticsListener.EventTime, output: Any, renderTimeMs: Long) {
+                if (ttffMs == null) ttffMs = renderTimeMs - loadStartMs
+            }
+        })
+    }
+
     private fun tick() {
+        diag = if (current != null) buildDiag() else ""
         val url = current?.url
         if (url == null || error != null || !player.playWhenReady) { stuckTicks = 0; lastFrames = -1; return }
         val frames = player.videoDecoderCounters?.let { it.ensureUpdated(); it.renderedOutputBufferCount.toLong() } ?: -1L
@@ -200,6 +252,8 @@ class PlayerController(context: Context) {
     }
 
     private fun load(url: String, mode: Int) {
+        loadStartMs = SystemClock.elapsedRealtime()
+        ttffMs = null; droppedFrames = 0; videoDecoder = null; audioDecoder = null
         audioInfo = null
         attempt = mode
         tried += mode
