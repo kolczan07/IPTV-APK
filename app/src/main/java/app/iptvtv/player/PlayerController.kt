@@ -132,20 +132,25 @@ class PlayerController(context: Context) {
                     (httpStatus?.let { "; HTTP $it" } ?: "") + ")"
             }
 
-            override fun onTracksChanged(tracks: Tracks) {
-                val audio = tracks.groups.filter { it.type == C.TRACK_TYPE_AUDIO }
-                audioInfo = when {
-                    tracks.groups.isEmpty() -> null
-                    audio.isEmpty() -> "Brak ścieżki audio w strumieniu"
-                    audio.any { it.isSelected } -> null
-                    else -> "Brak dekodera dźwięku w tym urządzeniu (${audio.first().getTrackFormat(0).sampleMimeType ?: "?"})"
-                }
-            }
+            override fun onTracksChanged(tracks: Tracks) = updateAudioInfo()
 
             override fun onPlaybackStateChanged(state: Int) {
                 if (state == Player.STATE_READY) current?.url?.let { learned[it] = attempt }
+                updateAudioInfo()
             }
         })
+    }
+
+    /** Ostrzega o dźwięku dopiero gdy strumień już gra (READY), a żaden dekoder audio nie został wybrany. */
+    private fun updateAudioInfo() {
+        if (player.playbackState != Player.STATE_READY) { audioInfo = null; return }
+        val groups = player.currentTracks.groups
+        val audio = groups.filter { it.type == C.TRACK_TYPE_AUDIO }
+        audioInfo = when {
+            audio.isEmpty() -> "Brak ścieżki audio w strumieniu"
+            player.audioFormat != null || audio.any { it.isSelected } -> null
+            else -> "Brak dekodera dźwięku w tym urządzeniu (${audio.first().getTrackFormat(0).sampleMimeType ?: "?"})"
+        }
     }
 
     private fun load(url: String, mode: Int) {
