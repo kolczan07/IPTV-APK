@@ -8,12 +8,12 @@ import android.provider.Settings
 import androidx.core.content.FileProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import okhttp3.OkHttpClient
-import okhttp3.Request
 import org.json.JSONObject
 import java.io.File
+import java.io.FileOutputStream
 import java.io.IOException
-import java.util.concurrent.TimeUnit
+import java.net.HttpURLConnection
+import java.net.URL
 
 data class UpdateInfo(val version: String, val notes: String, val apkUrl: String, val size: Long)
 
@@ -33,25 +33,23 @@ class Updater(
     private val repo: String,
     private val currentVersion: String,
 ) {
-    private val client = OkHttpClient.Builder()
-        .connectTimeout(20, TimeUnit.SECONDS)
-        .readTimeout(120, TimeUnit.SECONDS)
-        // Część boxów/routerów/filtrów źle znosi HTTP/2 (objaw: 504 przy pobieraniu z GitHuba).
-        .protocols(listOf(okhttp3.Protocol.HTTP_1_1))
-        .retryOnConnectionFailure(true)
-        .build()
+    // Jak w MD-Tools: systemowy HttpURLConnection (stos sieciowy platformy, ten sam co w przeglądarkowych
+    // pobraniach), bez własnych ustawień protokołu — u nas OkHttp dostawał 504 tam, gdzie MD-Tools działa.
+    private fun open(url: String, connectMs: Int, readMs: Int, userAgent: String? = null): HttpURLConnection =
+        (URL(url).openConnection() as HttpURLConnection).apply {
+            connectTimeout = connectMs
+            readTimeout = readMs
+            if (userAgent != null) setRequestProperty("User-Agent", userAgent)
+        }
 
     /** Zwraca informacje o nowszej wersji albo null, gdy nie ma nowszej. */
     suspend fun check(): UpdateInfo? = withContext(Dispatchers.IO) {
-        val req = Request.Builder()
-            .url("https://api.github.com/repos/$repo/releases/latest")
-            .header("Accept", "application/vnd.github+json")
-            .header("User-Agent", "iptv-tv-updater")
-            .build()
-        client.newCall(req).execute().use { resp ->
-            if (resp.code == 404) return@withContext null // brak wydań
-            if (!resp.isSuccessful) throw IOException("HTTP ${resp.code}")
-            val json = JSONObject(resp.body!!.string())
+        val c = open("https://api.github.com/repos/$repo/releases/latest", 10_000, 15_000, "IPTV-TV/$currentVersion")
+        c.setRequestProperty("Accept", "application/vnd.github+json")
+        try {
+            if (c.responseCode == 404) return@withContext null // brak wydań
+            if (c.responseCode !in 200..299) throw IOException("HTTP ${c.responseCode}")
+            val json = JSONObject(c.inputStream.bufferedReader().use { it.readText() })
             val tag = json.optString("tag_name")
             if (!isNewer(tag, currentVersion)) return@withContext null
             val assets = json.optJSONArray("assets") ?: return@withContext null
@@ -67,10 +65,11 @@ class Updater(
                 }
             }
             null
+        } finally {
+            c.disconnect()
         }
     }
 
-    /** Pobiera APK; do 3 prób z przerwą (chwilowe 5xx / zerwane połączenie). */
     suspend fun download(info: UpdateInfo, onProgress: (Float) -> Unit): File {
         var last: Exception? = null
         repeat(3) { attempt ->
@@ -90,14 +89,13 @@ class Updater(
             listFiles()?.forEach { it.delete() }
         }
         val file = File(dir, "update.apk")
-        val req = Request.Builder().url(info.apkUrl).header("User-Agent", "iptv-tv-updater").build()
-        client.newCall(req).execute().use { resp ->
-            if (!resp.isSuccessful) throw IOException("HTTP ${resp.code}")
-            val body = resp.body!!
-            val total = body.contentLength().takeIf { it > 0 } ?: info.size
-            body.byteStream().use { input ->
-                file.outputStream().use { out ->
-                    val buf = ByteArray(64 * 1024)
+        val c = open(info.apkUrl, 15_000, 30_000)   // bez własnego User-Agenta, jak w MD-Tools
+        try {
+            if (c.responseCode !in 200..299) throw IOException("HTTP ${c.responseCode}")
+            val total = if (c.contentLengthLong > 0) c.contentLengthLong else info.size
+            c.inputStream.use { input ->
+                FileOutputStream(file).use { out ->
+                    val buf = ByteArray(32 * 1024)
                     var done = 0L
                     var lastPct = -1
                     while (true) {
@@ -112,6 +110,8 @@ class Updater(
                     }
                 }
             }
+        } finally {
+            c.disconnect()
         }
         file
     }
