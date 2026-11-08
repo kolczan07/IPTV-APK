@@ -13,9 +13,12 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 
 enum class Screen { Setup, List, Guide, Player }
+
+private const val EPG_TTL = 3 * 3_600_000L
 
 class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val db = AppDb.get(app)
@@ -98,28 +101,33 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun refresh(m3u: String = m3uUrl.value, epg: String = epgUrl.value) {
+    /**
+     * Playlista i EPG pobierają się równolegle (EPG nie czeka na playlistę). EPG, odświeżone w ciągu
+     * ostatnich 3 h, nie jest pobierane ponownie przy starcie; ręczne odświeżenie i zmiana adresów wymuszają pobranie.
+     */
+    fun refresh(m3u: String = m3uUrl.value, epg: String = epgUrl.value, force: Boolean = false) {
         if (loading || (m3u.isBlank() && epg.isBlank())) return
         viewModelScope.launch {
             loading = true
-            val parts = mutableListOf<String>()
-            if (m3u.isNotBlank()) {
-                status = "Pobieram playlistę…"
-                parts += try {
+            status = "Pobieram playlistę i EPG…"
+            val epgFresh = !force && System.currentTimeMillis() - settings.epgFetchedAt.first() < EPG_TTL
+            val channelsJob = async {
+                if (m3u.isBlank()) null else try {
                     "Kanały: ${repo.refresh(m3u)}"
                 } catch (e: Exception) {
                     "Playlista: błąd (${e.message})"
                 }
             }
-            if (epg.isNotBlank()) {
-                status = "Pobieram EPG…"
-                parts += try {
-                    "EPG: ${repo.refreshEpg(epg)} programów"
+            val epgJob = async {
+                if (epg.isBlank() || epgFresh) null else try {
+                    val n = repo.refreshEpg(epg)
+                    settings.markEpgFetched(System.currentTimeMillis())
+                    "EPG: $n programów"
                 } catch (e: Exception) {
                     "EPG: błąd (${e.message})"
                 }
             }
-            status = parts.joinToString("\n")
+            status = listOfNotNull(channelsJob.await(), epgJob.await()).joinToString("\n")
             loading = false
         }
     }
@@ -130,7 +138,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             settings.save(m, e)
             screen = Screen.List
-            refresh(m, e)
+            refresh(m, e, force = true)
         }
     }
 

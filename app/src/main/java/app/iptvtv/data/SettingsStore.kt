@@ -2,6 +2,7 @@ package app.iptvtv.data
 
 import android.content.Context
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
@@ -16,6 +17,12 @@ private val DEFAULT_EPG = app.iptvtv.BuildConfig.DEFAULT_EPG
 class SettingsStore(private val ctx: Context) {
     private val m3uKey = stringPreferencesKey("m3u_url")
     private val epgKey = stringPreferencesKey("epg_url")
+
+    private val epgAtKey = longPreferencesKey("epg_fetched_at")
+
+    /** Kiedy ostatnio pobrano EPG (ms); 0 = nigdy. Pozwala nie ściągać wielkiego XML-a przy każdym starcie. */
+    val epgFetchedAt: Flow<Long> = ctx.dataStore.data.map { it[epgAtKey] ?: 0L }
+    suspend fun markEpgFetched(at: Long) { ctx.dataStore.edit { it[epgAtKey] = at } }
 
     val m3uUrl: Flow<String> = ctx.dataStore.data.map { it[m3uKey] ?: DEFAULT_M3U }
     val epgUrl: Flow<String> = ctx.dataStore.data.map { it[epgKey] ?: DEFAULT_EPG }

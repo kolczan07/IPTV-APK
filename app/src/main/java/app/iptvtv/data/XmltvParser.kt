@@ -3,27 +3,42 @@ package app.iptvtv.data
 import android.util.Xml
 import org.xmlpull.v1.XmlPullParser
 import java.io.InputStream
-import java.text.SimpleDateFormat
-import java.util.Locale
-import java.util.TimeZone
 
 /** Strumieniowy parser XMLTV: zachowuje tylko programy z okna [from, to]. */
 object XmltvParser {
-    private val withZone = SimpleDateFormat("yyyyMMddHHmmss Z", Locale.ROOT)
-    private val noZone = SimpleDateFormat("yyyyMMddHHmmss", Locale.ROOT).apply {
-        timeZone = TimeZone.getTimeZone("UTC")
-    }
-
+    /** Ręczny parser "yyyyMMddHHmmss[ +hhmm]" — dużo szybszy niż SimpleDateFormat przy dziesiątkach tysięcy wpisów. */
     private fun time(raw: String?): Long? {
         val t = raw?.trim() ?: return null
         if (t.length < 14) return null
-        return try {
-            val base = t.take(14)
-            val zone = t.drop(14).trim()
-            (if (zone.isEmpty()) noZone.parse(base) else withZone.parse("$base $zone"))?.time
-        } catch (e: Exception) {
-            null
+        fun d(i: Int, n: Int): Int {
+            var v = 0
+            for (k in i until i + n) {
+                val c = t[k]
+                if (c !in '0'..'9') return -1
+                v = v * 10 + (c - '0')
+            }
+            return v
         }
+        val y = d(0, 4); val mo = d(4, 2); val da = d(6, 2)
+        val h = d(8, 2); val mi = d(10, 2); val s = d(12, 2)
+        if (y < 0 || mo !in 1..12 || da !in 1..31 || h < 0 || mi < 0 || s < 0) return null
+        var offset = 0L
+        val z = t.substring(14).trim()
+        if (z.length >= 5 && (z[0] == '+' || z[0] == '-')) {
+            val zh = z.substring(1, 3).toIntOrNull()
+            val zm = z.substring(3, 5).toIntOrNull()
+            if (zh != null && zm != null) offset = (zh * 3600L + zm * 60L) * (if (z[0] == '-') -1 else 1)
+        }
+        return (daysFromCivil(y, mo, da) * 86400L + h * 3600L + mi * 60L + s - offset) * 1000L
+    }
+
+    private fun daysFromCivil(y0: Int, m: Int, d: Int): Long {
+        val y = if (m <= 2) y0 - 1 else y0
+        val era = (if (y >= 0) y else y - 399) / 400
+        val yoe = y - era * 400
+        val doy = (153 * (if (m > 2) m - 3 else m + 9) + 2) / 5 + d - 1
+        val doe = yoe * 365 + yoe / 4 - yoe / 100 + doy
+        return era.toLong() * 146097L + doe - 719468L
     }
 
     fun parse(input: InputStream, from: Long, to: Long): List<ProgrammeEntity> {
@@ -38,6 +53,18 @@ object XmltvParser {
                 val channel = p.getAttributeValue(null, "channel")?.trim()?.lowercase()
                 val start = time(p.getAttributeValue(null, "start"))
                 val stop = time(p.getAttributeValue(null, "stop"))
+                val inWindow = channel != null && start != null && stop != null && stop > from && start < to
+                if (!inWindow) {
+                    // poza oknem czasowym: przeskocz zawartość bez budowania stringów
+                    var depth = 1
+                    while (depth > 0) {
+                        val e = p.next()
+                        if (e == XmlPullParser.END_DOCUMENT) break
+                        if (e == XmlPullParser.START_TAG) depth++ else if (e == XmlPullParser.END_TAG) depth--
+                    }
+                    ev = p.next()
+                    continue
+                }
                 var title: String? = null
                 var desc: String? = null
                 while (true) {

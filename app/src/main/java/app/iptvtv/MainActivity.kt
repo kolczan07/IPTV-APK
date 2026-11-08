@@ -68,7 +68,7 @@ private fun App(vm: MainViewModel) {
                 channels = channels, history = history, epg = guide, controller = vm.controller,
                 status = vm.status, loading = vm.loading,
                 onPreview = vm::tune, onPlay = vm::play, onToggleFavorite = vm::toggleFavorite,
-                onRefresh = { vm.refresh() }, onSettings = vm::openSettings, onGuide = vm::openGuide,
+                onRefresh = { vm.refresh(force = true) }, onSettings = vm::openSettings, onGuide = vm::openGuide,
             )
             Screen.Guide -> GuideScreen(
                 channels = vm.guideChannels, byChannel = grid,
