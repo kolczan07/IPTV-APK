@@ -27,6 +27,7 @@ import androidx.media3.extractor.Extractor
 import androidx.media3.extractor.ExtractorsFactory
 import androidx.media3.extractor.ts.DefaultTsPayloadReaderFactory
 import androidx.media3.extractor.ts.PsExtractor
+import androidx.media3.extractor.ts.TsExtractor
 import app.iptvtv.data.ChannelEntity
 
 /**
@@ -68,6 +69,20 @@ class PlayerController(context: Context) {
     private val renderers = DefaultRenderersFactory(context.applicationContext)
         .forceDisableMediaCodecAsynchronousQueueing()
         .setEnableDecoderFallback(true)
+
+    // Tryb TS: wymuszony extractor MPEG-TS bez zgadywania formatu (strumienie z tunera Enigma2 :8001 to zawsze TS).
+    // Pomija rozpoznawanie, które przy dopiero strojonym tunerze potrafiło zawieść i uruchamiać kolejne próby.
+    private val tsSourceFactory = ProgressiveMediaSource.Factory(
+        http,
+        ExtractorsFactory {
+            arrayOf<Extractor>(
+                TsExtractor(
+                    DefaultTsPayloadReaderFactory.FLAG_DETECT_ACCESS_UNITS or
+                        DefaultTsPayloadReaderFactory.FLAG_ALLOW_NON_IDR_KEYFRAMES
+                )
+            )
+        }
+    )
 
     val player: ExoPlayer = ExoPlayer.Builder(context.applicationContext, renderers)
         .setMediaSourceFactory(autoSourceFactory)
@@ -115,7 +130,11 @@ class PlayerController(context: Context) {
     /** Zawsze zaczynamy od AUTO (jak wcześniej), tylko .m3u8 od razu jako HLS. */
     private fun initialAttempt(url: String): Int {
         val path = url.substringBefore('?').lowercase()
-        return if (path.endsWith(".m3u8")) HLS else AUTO
+        return when {
+            path.endsWith(".m3u8") -> HLS
+            ENIGMA_REF.containsMatchIn(path) -> TS      // .../1:0:19:3DCD:640:13E:820000:0:0:0:
+            else -> AUTO
+        }
     }
 
     init {
@@ -128,7 +147,7 @@ class PlayerController(context: Context) {
                 // 3001..3004 = błędy parsowania kontenera / manifestu; 2000 = nieokreślony IO
                 // (np. wymuszony extractor na złym formacie) -> przejdź przez pozostałe tryby.
                 if (url != null && (code in 3001..3004 || code == PlaybackException.ERROR_CODE_IO_UNSPECIFIED)) {
-                    val next = listOf(AUTO, PS, HLS).firstOrNull { it !in tried }
+                    val next = listOf(TS, AUTO, HLS, PS).firstOrNull { it !in tried }
                     if (next != null) {
                         load(url, next)
                         return
@@ -174,7 +193,7 @@ class PlayerController(context: Context) {
     private fun buildDiag(): String {
         val v = player.videoFormat
         val a = player.audioFormat
-        val mode = when (attempt) { HLS -> "HLS"; PS -> "PS"; else -> "AUTO" }
+        val mode = when (attempt) { HLS -> "HLS"; PS -> "PS"; TS -> "TS"; else -> "AUTO" }
         val st = when (player.playbackState) {
             Player.STATE_IDLE -> "IDLE"; Player.STATE_BUFFERING -> "BUFOR"
             Player.STATE_READY -> "GRA"; Player.STATE_ENDED -> "KONIEC"; else -> "?"
@@ -220,14 +239,16 @@ class PlayerController(context: Context) {
         val progressing = player.playbackState == Player.STATE_READY && (!hasVideo || frames != lastFrames)
         lastFrames = frames
         if (progressing) { stuckTicks = 0; return }
-        if (++stuckTicks < STUCK_TICKS) return
+        // Przed pierwszą klatką dajemy więcej czasu: tuner Enigmy stroi się i rozkodowuje kanał nawet kilkanaście sekund.
+        val limit = if (ttffMs == null) STARTUP_TICKS else STUCK_TICKS
+        if (++stuckTicks < limit) return
         stuckTicks = 0
         recover(url)
     }
 
     private fun recover(url: String) {
         if (recoveries >= MAX_RECOVERIES) {
-            error = "Strumień nie odpowiada (brak postępu przez ${STUCK_TICKS * 2} s)"
+            error = "Strumień nie odpowiada (brak postępu przez ${(if (ttffMs == null) STARTUP_TICKS else STUCK_TICKS) * 2} s)"
             return
         }
         recoveries++
@@ -259,6 +280,7 @@ class PlayerController(context: Context) {
         tried += mode
         when (mode) {
             PS -> player.setMediaSource(psSourceFactory.createMediaSource(MediaItem.fromUri(url)))
+            TS -> player.setMediaSource(tsSourceFactory.createMediaSource(MediaItem.fromUri(url)))
             HLS -> player.setMediaItem(
                 MediaItem.Builder().setUri(url).setMimeType(MimeTypes.APPLICATION_M3U8).build()
             )
@@ -308,9 +330,12 @@ class PlayerController(context: Context) {
         const val AUTO = 0
         const val HLS = 1
         const val PS = 2
+        const val TS = 3
+        val ENIGMA_REF = Regex("""/\d+:\d+:[0-9a-f]+:[0-9a-f]+:""")
         const val MAX_RETRIES = 3
         const val MAX_RECOVERIES = 3
-        const val STUCK_TICKS = 5   // 5 x 2 s
+        const val STUCK_TICKS = 5      // 5 x 2 s po starcie
+        const val STARTUP_TICKS = 15   // 15 x 2 s do pierwszej klatki
         val RETRYABLE = setOf(
             PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW,
             PlaybackException.ERROR_CODE_IO_UNSPECIFIED,
