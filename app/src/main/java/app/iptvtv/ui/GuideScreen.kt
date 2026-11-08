@@ -150,8 +150,8 @@ private fun ProgrammeCells(
                     .padding(end = 2.dp)
                     .onFocusChanged { if (it.hasFocus) onFocus(p) },
                 colors = CardDefaults.colors(
-                    containerColor = if (airing) Color(0xFF16414F) else Panel,
-                    focusedContainerColor = Color(0xFF24485A),
+                    containerColor = if (airing) AiringBg else Panel,
+                    focusedContainerColor = FocusBg,
                 ),
             ) {
                 Box(Modifier.fillMaxSize().padding(horizontal = 10.dp), contentAlignment = Alignment.CenterStart) {

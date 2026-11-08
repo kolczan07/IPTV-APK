@@ -46,6 +46,7 @@ fun LoadingOverlay(
             Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.6f)), // przyciemnia ostatnią klatkę poprzedniego kanału
             contentAlignment = Alignment.Center,
         ) {
+            androidx.compose.runtime.CompositionLocalProvider(androidx.tv.material3.LocalContentColor provides Color.White) {
             Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(if (small) 6.dp else 14.dp)) {
                 if (channel?.logo != null) {
                     AsyncImage(
@@ -58,6 +59,7 @@ fun LoadingOverlay(
                     Text(channel.name, style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center, maxLines = 2)
                 }
                 SweepBar(Modifier.width(if (small) 90.dp else 220.dp))
+            }
             }
         }
     }

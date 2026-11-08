@@ -33,7 +33,7 @@ private const val SWIPE_PX = 120f
 @Composable
 private fun overlayButtonColors() = androidx.tv.material3.ButtonDefaults.colors(
     containerColor = Color(0xB30A0E12), contentColor = Color.White,
-    focusedContainerColor = Accent, focusedContentColor = Color(0xFF00232B),
+    focusedContainerColor = Accent, focusedContentColor = LocalPalette.current.onAccent,
 )
 
 @Composable

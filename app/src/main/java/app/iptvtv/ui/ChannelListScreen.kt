@@ -184,7 +184,7 @@ private fun GroupButton(group: String, active: Boolean, modifier: Modifier, onCl
             containerColor = if (active) MaterialTheme.colorScheme.primary else Color.Transparent,
             contentColor = if (active) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
             focusedContainerColor = if (active) MaterialTheme.colorScheme.primary else PanelHi,
-            focusedContentColor = if (active) MaterialTheme.colorScheme.onPrimary else Color.White,
+            focusedContentColor = if (active) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
         ),
     ) { Text(group, maxLines = 1) }
 }
@@ -255,7 +255,7 @@ private fun ChannelRow(
         onClick = onClick, onLongClick = onLongClick, modifier = modifier.fillMaxWidth(),
         colors = CardDefaults.colors(
             containerColor = if (playing) PanelHi else Panel,
-            focusedContainerColor = Color(0xFF24485A),
+            focusedContainerColor = FocusBg,
         ),
     ) {
         Row(Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {

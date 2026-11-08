@@ -39,6 +39,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val epgUrl = settings.epgUrl.stateIn(viewModelScope, SharingStarted.Eagerly, "")
     val epgOffsetMin = settings.epgOffsetMin.stateIn(viewModelScope, SharingStarted.Eagerly, 0)
 
+    val themeMode = settings.themeMode
+        .map { s -> app.iptvtv.ui.ThemeMode.entries.firstOrNull { it.name == s } ?: app.iptvtv.ui.ThemeMode.Dark }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, app.iptvtv.ui.ThemeMode.Dark)
+    val accent = settings.accentIdx
+        .map { i -> app.iptvtv.ui.AccentColor.entries.getOrElse(i) { app.iptvtv.ui.AccentColor.Teal } }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, app.iptvtv.ui.AccentColor.Teal)
+    fun setThemeMode(m: app.iptvtv.ui.ThemeMode) { viewModelScope.launch { settings.setThemeMode(m.name) } }
+    fun setAccent(a: app.iptvtv.ui.AccentColor) { viewModelScope.launch { settings.setAccentIdx(a.ordinal) } }
+
     val epgLocalTime = settings.epgLocalTime.stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     /** Przełącza tryb "czas z EPG = czas lokalny" i pobiera EPG od nowa (zmiana dotyczy parsowania). */

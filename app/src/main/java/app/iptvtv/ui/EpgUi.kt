@@ -24,7 +24,7 @@ fun progressOf(p: ProgrammeEntity, now: Long): Float =
 
 @Composable
 fun ProgressLine(fraction: Float, modifier: Modifier = Modifier) {
-    Box(modifier.fillMaxWidth().height(4.dp).background(Color(0x40FFFFFF))) {
+    Box(modifier.fillMaxWidth().height(4.dp).background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f))) {
         Box(Modifier.fillMaxWidth(fraction).fillMaxHeight().background(MaterialTheme.colorScheme.primary))
     }
 }

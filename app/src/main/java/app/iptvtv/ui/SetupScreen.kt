@@ -1,7 +1,9 @@
 package app.iptvtv.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -29,6 +31,7 @@ import androidx.tv.material3.Text
 
 private enum class Section(val label: String) {
     Account("Ustawienia konta"),
+    App("Ustawienia aplikacji"),
     About("O aplikacji"),
 }
 
@@ -41,6 +44,10 @@ fun SetupScreen(
     updatesEnabled: Boolean,
     updateText: String,
     onCheckUpdate: () -> Unit,
+    themeMode: ThemeMode,
+    onThemeMode: (ThemeMode) -> Unit,
+    accent: AccentColor,
+    onAccent: (AccentColor) -> Unit,
     epgOffsetMin: Int,
     onEpgOffset: (Int) -> Unit,
     epgLocalTime: Boolean,
@@ -61,6 +68,10 @@ fun SetupScreen(
                 epgOffsetMin = epgOffsetMin, onEpgOffset = onEpgOffset,
                 epgLocalTime = epgLocalTime, onEpgLocalTime = onEpgLocalTime,
                 onSave = { onSave(m3u, epg) },
+            )
+            Section.App -> AppSection(
+                themeMode = themeMode, onThemeMode = onThemeMode,
+                accent = accent, onAccent = onAccent,
             )
             Section.About -> AboutSection(
                 versionName = versionName,
@@ -194,6 +205,64 @@ private fun EpgOffsetRow(offsetMin: Int, onChange: (Int) -> Unit) {
 }
 
 @Composable
+private fun AppSection(
+    themeMode: ThemeMode,
+    onThemeMode: (ThemeMode) -> Unit,
+    accent: AccentColor,
+    onAccent: (AccentColor) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
+        Text("Ustawienia aplikacji", style = MaterialTheme.typography.headlineLarge)
+
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Motyw", style = MaterialTheme.typography.labelLarge)
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                ThemeMode.entries.forEach { m ->
+                    Button(
+                        onClick = { onThemeMode(m) },
+                        modifier = Modifier.heightIn(min = 48.dp),
+                        colors = ButtonDefaults.colors(
+                            containerColor = if (m == themeMode) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.surfaceVariant,
+                            contentColor = if (m == themeMode) MaterialTheme.colorScheme.onPrimary
+                            else MaterialTheme.colorScheme.onSurface,
+                            focusedContainerColor = MaterialTheme.colorScheme.primary,
+                            focusedContentColor = MaterialTheme.colorScheme.onPrimary,
+                        ),
+                    ) { Text((if (m == themeMode) "✓ " else "") + m.label) }
+                }
+            }
+        }
+
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Kolor wiodący", style = MaterialTheme.typography.labelLarge)
+            AccentColor.entries.chunked(3).forEach { row ->
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    row.forEach { a ->
+                        Button(
+                            onClick = { onAccent(a) },
+                            modifier = Modifier.heightIn(min = 48.dp),
+                            colors = ButtonDefaults.colors(
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                contentColor = MaterialTheme.colorScheme.onSurface,
+                                focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                focusedContentColor = MaterialTheme.colorScheme.onSurface,
+                            ),
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(Modifier.size(18.dp).background(a.color, CircleShape))
+                                Spacer(Modifier.width(8.dp))
+                                Text((if (a == accent) "✓ " else "") + a.label, maxLines = 1)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun AboutSection(
     versionName: String,
     updatesEnabled: Boolean,
@@ -238,8 +307,8 @@ private fun UrlField(label: String, value: String, onChange: (String) -> Unit) {
             value = value,
             onValueChange = onChange,
             singleLine = true,
-            textStyle = TextStyle(color = Color.White, fontSize = 20.sp),
-            cursorBrush = SolidColor(Color.White),
+            textStyle = TextStyle(color = MaterialTheme.colorScheme.onSurface, fontSize = 20.sp),
+            cursorBrush = SolidColor(MaterialTheme.colorScheme.onSurface),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
             modifier = Modifier
                 .fillMaxWidth()

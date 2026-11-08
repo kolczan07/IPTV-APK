@@ -25,7 +25,12 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        setContent { IptvTheme { App(vm) } }
+        setContent {
+            val mode by vm.themeMode.collectAsStateWithLifecycle()
+            val accent by vm.accent.collectAsStateWithLifecycle()
+            // Odtwarzacz zawsze w ciemnym motywie (nakładki na obrazie wideo).
+            IptvTheme(if (vm.screen == Screen.Player) ThemeMode.Dark else mode, accent) { App(vm) }
+        }
     }
 
     // Najwyższa częstotliwość odświeżania ekranu przy tej samej rozdzielczości (np. 120 Hz).
@@ -77,6 +82,10 @@ private fun App(vm: MainViewModel) {
                 updatesEnabled = vm.updatesEnabled,
                 updateText = updateLabel(vm.update),
                 onCheckUpdate = { vm.checkUpdate(manual = true) },
+                themeMode = vm.themeMode.collectAsStateWithLifecycle().value,
+                onThemeMode = vm::setThemeMode,
+                accent = vm.accent.collectAsStateWithLifecycle().value,
+                onAccent = vm::setAccent,
                 epgOffsetMin = vm.epgOffsetMin.collectAsStateWithLifecycle().value,
                 onEpgOffset = vm::adjustEpgOffset,
                 epgLocalTime = vm.epgLocalTime.collectAsStateWithLifecycle().value,
@@ -102,7 +111,7 @@ private fun App(vm: MainViewModel) {
             UpdateBanner(
                 state = vm.update,
                 onInstall = vm::installUpdate, onDismiss = vm::dismissUpdate,
-                modifier = Modifier.align(Alignment.TopEnd).padding(24.dp),
+                modifier = Modifier.align(Alignment.Center).padding(24.dp),
             )
         }
     }

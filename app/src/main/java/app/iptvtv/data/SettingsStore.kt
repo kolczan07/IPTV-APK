@@ -21,6 +21,14 @@ class SettingsStore(private val ctx: Context) {
     private val epgKey = stringPreferencesKey("epg_url")
 
     private val epgAtKey = longPreferencesKey("epg_fetched_at")
+    private val themeKey = stringPreferencesKey("theme_mode")
+    private val accentKey = intPreferencesKey("accent_idx")
+
+    val themeMode: Flow<String> = ctx.dataStore.data.map { it[themeKey] ?: "Dark" }
+    val accentIdx: Flow<Int> = ctx.dataStore.data.map { it[accentKey] ?: 0 }
+    suspend fun setThemeMode(v: String) { ctx.dataStore.edit { it[themeKey] = v } }
+    suspend fun setAccentIdx(v: Int) { ctx.dataStore.edit { it[accentKey] = v } }
+
     private val epgLocalKey = booleanPreferencesKey("epg_local_time")
 
     /** Traktuj godziny w XMLTV jako czas lokalny urządzenia, ignorując strefę zapisaną w pliku. */
