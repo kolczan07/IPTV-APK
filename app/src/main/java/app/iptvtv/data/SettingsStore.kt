@@ -9,9 +9,9 @@ import kotlinx.coroutines.flow.map
 
 private val Context.dataStore by preferencesDataStore("settings")
 
-// Domyślne adresy (używane, gdy użytkownik nie zapisał własnych w Ustawieniach).
-const val DEFAULT_M3U = "http://root:pkteam@192.168.0.121:80/file?file=/media/hdd/IPTV_Server/playlist_http.m3u"
-const val DEFAULT_EPG = "http://root:pkteam@192.168.0.121:80/file?file=/media/hdd/IPTV_Server/epg.xml"
+// Domyślne adresy wstrzykiwane w czasie budowania (sekrety CI); puste w lokalnych buildach.
+private val DEFAULT_M3U = app.iptvtv.BuildConfig.DEFAULT_M3U
+private val DEFAULT_EPG = app.iptvtv.BuildConfig.DEFAULT_EPG
 
 class SettingsStore(private val ctx: Context) {
     private val m3uKey = stringPreferencesKey("m3u_url")

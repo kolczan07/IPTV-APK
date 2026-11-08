@@ -16,6 +16,10 @@ android {
         versionCode = (findProperty("versionCode") as String?)?.toIntOrNull() ?: 1
         versionName = (findProperty("versionName") as String?) ?: "0.1.0"
         // "wlasciciel/repo" z GitHub Releases; puste = aktualizacje wylaczone (lokalne buildy)
+        // Domyślne adresy playlisty/EPG z sekretów CI (ORG_GRADLE_PROJECT_defaultM3u / defaultEpg); puste w lokalnych buildach
+        fun quoted(name: String) = "\"" + ((findProperty(name) as String?) ?: "").replace("\\", "\\\\").replace("\"", "\\\"") + "\""
+        buildConfigField("String", "DEFAULT_M3U", quoted("defaultM3u"))
+        buildConfigField("String", "DEFAULT_EPG", quoted("defaultEpg"))
         buildConfigField("String", "UPDATE_REPO", "\"${(findProperty("updateRepo") as String?) ?: ""}\"")
     }
 
