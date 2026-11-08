@@ -98,6 +98,10 @@ fun PlayerScreen(
         controller.error?.let {
             Text(it, modifier = Modifier.align(Alignment.Center).padding(16.dp), color = MaterialTheme.colorScheme.primary)
         }
+        controller.audioInfo?.let {
+            Text(it, modifier = Modifier.align(Alignment.TopCenter).padding(top = 72.dp, start = 16.dp, end = 16.dp),
+                style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
+        }
         if (overlay) {
             // Przyciski dotykowe (na TV nie dostają fokusu, bo pilot obsługuje Box wyżej).
             Row(

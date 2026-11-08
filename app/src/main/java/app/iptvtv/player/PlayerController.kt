@@ -1,15 +1,21 @@
 package app.iptvtv.player
 
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.datasource.HttpDataSource
+import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
@@ -55,6 +61,10 @@ class PlayerController(context: Context) {
     )
 
     val player: ExoPlayer = ExoPlayer.Builder(context.applicationContext)
+        // Jeśli główny dekoder (np. sprzętowy) zawiedzie lub jest zajęty, spróbuj kolejnego.
+        .setRenderersFactory(
+            DefaultRenderersFactory(context.applicationContext).setEnableDecoderFallback(true)
+        )
         .setMediaSourceFactory(autoSourceFactory)
         .setLoadControl(
             DefaultLoadControl.Builder()
@@ -70,6 +80,14 @@ class PlayerController(context: Context) {
         private set
     var error by mutableStateOf<String?>(null)
         private set
+
+    /** Ostrzeżenie o dźwięku (brak ścieżki / brak dekodera w urządzeniu); null = dźwięk gra albo jeszcze nie wiadomo. */
+    var audioInfo by mutableStateOf<String?>(null)
+        private set
+
+    private val main = Handler(Looper.getMainLooper())
+    private var retries = 0
+    private var httpStatus: Int? = null
 
     private var attempt = AUTO
     private val tried = mutableSetOf<Int>()        // próby użyte dla bieżącego kanału
@@ -87,15 +105,41 @@ class PlayerController(context: Context) {
             override fun onPlayerError(e: PlaybackException) {
                 val url = current?.url
                 if (firstError == null) firstError = e.errorCodeName
-                // 3001..3004 = błędy parsowania kontenera / manifestu
-                if (url != null && e.errorCode in 3001..3004) {
+                (e.cause as? HttpDataSource.InvalidResponseCodeException)?.let { httpStatus = it.responseCode }
+                val code = e.errorCode
+                // 3001..3004 = błędy parsowania kontenera / manifestu; 2000 = nieokreślony IO
+                // (np. wymuszony extractor na złym formacie) -> przejdź przez pozostałe tryby.
+                if (url != null && (code in 3001..3004 || code == PlaybackException.ERROR_CODE_IO_UNSPECIFIED)) {
                     val next = listOf(AUTO, PS, HLS).firstOrNull { it !in tried }
                     if (next != null) {
                         load(url, next)
                         return
                     }
                 }
-                error = "Błąd odtwarzania ($firstError; próby: ${tried.sorted()}; ostatni: ${e.errorCodeName})"
+                // Błędy przejściowe (sieć, limit połączeń u dostawcy, zajęty dekoder, okno live):
+                // do 3 ponowień z rosnącą przerwą, zanim pokażemy błąd.
+                if (url != null && code in RETRYABLE && retries < MAX_RETRIES) {
+                    retries++
+                    main.postDelayed({
+                        if (current?.url == url && error == null) {
+                            tried.clear()
+                            load(url, learned[url] ?: initialAttempt(url))
+                        }
+                    }, 1500L * retries)
+                    return
+                }
+                error = "Błąd odtwarzania ($firstError; próby: ${tried.sorted()}; ostatni: ${e.errorCodeName}" +
+                    (httpStatus?.let { "; HTTP $it" } ?: "") + ")"
+            }
+
+            override fun onTracksChanged(tracks: Tracks) {
+                val audio = tracks.groups.filter { it.type == C.TRACK_TYPE_AUDIO }
+                audioInfo = when {
+                    tracks.groups.isEmpty() -> null
+                    audio.isEmpty() -> "Brak ścieżki audio w strumieniu"
+                    audio.any { it.isSelected } -> null
+                    else -> "Brak dekodera dźwięku w tym urządzeniu (${audio.first().getTrackFormat(0).sampleMimeType ?: "?"})"
+                }
             }
 
             override fun onPlaybackStateChanged(state: Int) {
@@ -105,6 +149,7 @@ class PlayerController(context: Context) {
     }
 
     private fun load(url: String, mode: Int) {
+        audioInfo = null
         attempt = mode
         tried += mode
         when (mode) {
@@ -127,6 +172,9 @@ class PlayerController(context: Context) {
         }
         error = null
         firstError = null
+        httpStatus = null
+        retries = 0
+        main.removeCallbacksAndMessages(null)
         tried.clear()
         load(ch.url, learned[ch.url] ?: initialAttempt(ch.url))
     }
@@ -135,17 +183,31 @@ class PlayerController(context: Context) {
     fun resume() { if (current != null) player.playWhenReady = true }
 
     fun stop() {
+        main.removeCallbacksAndMessages(null)
         player.stop()
         player.clearMediaItems()
         current = null
         error = null
     }
 
-    fun release() = player.release()
+    fun release() {
+        main.removeCallbacksAndMessages(null)
+        player.release()
+    }
 
     private companion object {
         const val AUTO = 0
         const val HLS = 1
         const val PS = 2
+        const val MAX_RETRIES = 3
+        val RETRYABLE = setOf(
+            PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW,
+            PlaybackException.ERROR_CODE_IO_UNSPECIFIED,
+            PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED,
+            PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT,
+            PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS,
+            PlaybackException.ERROR_CODE_DECODER_INIT_FAILED,
+            PlaybackException.ERROR_CODE_DECODING_FAILED,
+        )
     }
 }
