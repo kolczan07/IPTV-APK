@@ -16,6 +16,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.datasource.HttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
+import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
@@ -59,7 +60,14 @@ class PlayerController(context: Context) {
         ExtractorsFactory { arrayOf<Extractor>(PsExtractor()) }
     )
 
-    val player: ExoPlayer = ExoPlayer.Builder(context.applicationContext)
+    // Dekodowanie: synchroniczna kolejka MediaCodec + zapasowy dekoder. Domyślna asynchroniczna kolejka
+    // (Media3, API 31+ i Fire TV) potrafi zamrażać/psuć obraz przy działającym dźwięku na boxach
+    // z układami Realtek/Amlogic; a gdy wybrany dekoder się nie uruchomi, próbujemy następnego.
+    private val renderers = DefaultRenderersFactory(context.applicationContext)
+        .forceDisableMediaCodecAsynchronousQueueing()
+        .setEnableDecoderFallback(true)
+
+    val player: ExoPlayer = ExoPlayer.Builder(context.applicationContext, renderers)
         .setMediaSourceFactory(autoSourceFactory)
         .setLoadControl(
             DefaultLoadControl.Builder()
