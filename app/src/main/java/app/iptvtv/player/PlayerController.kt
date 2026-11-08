@@ -100,7 +100,6 @@ class PlayerController(context: Context) {
     }
 
     init {
-        wd.postDelayed(watchdog, 2000)
         player.addListener(object : Player.Listener {
             override fun onPlayerError(e: PlaybackException) {
                 val url = current?.url
@@ -177,6 +176,8 @@ class PlayerController(context: Context) {
         player.stop()
         load(url, learned[url] ?: initialAttempt(url))
     }
+
+    init { wd.postDelayed(watchdog, 2000) }
 
     /** Ostrzega o dźwięku dopiero gdy strumień już gra (READY), a żaden dekoder audio nie został wybrany. */
     private fun updateAudioInfo() {
