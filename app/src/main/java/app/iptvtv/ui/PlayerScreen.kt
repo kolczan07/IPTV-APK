@@ -86,12 +86,13 @@ fun PlayerScreen(
                 PlayerView(ctx).apply {
                     useController = false
                     isFocusable = false
-                    setShowBuffering(PlayerView.SHOW_BUFFERING_ALWAYS)
+                    setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)
                     player = controller.player
                 }
             },
             onRelease = { it.player = null },
         )
+        LoadingOverlay(controller.loading && controller.error == null, controller.current, Modifier.fillMaxSize())
         // Dotyk: tap = pokaż/ukryj nakładkę, przeciągnięcie w górę/w dół = następny/poprzedni kanał.
         Box(
             Modifier.fillMaxSize()

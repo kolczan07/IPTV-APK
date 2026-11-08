@@ -93,6 +93,10 @@ class PlayerController(context: Context) {
     var error by mutableStateOf<String?>(null)
         private set
 
+    /** true od startu ładowania kanału do pierwszej klatki obrazu (steruje ekranem ładowania zamiast spinnera). */
+    var loading by mutableStateOf(false)
+        private set
+
     /** Ostrzeżenie o dźwięku (brak ścieżki / brak dekodera w urządzeniu); null = dźwięk gra albo jeszcze nie wiadomo. */
     var audioInfo by mutableStateOf<String?>(null)
         private set
@@ -224,12 +228,15 @@ class PlayerController(context: Context) {
 
             override fun onRenderedFirstFrame(eventTime: AnalyticsListener.EventTime, output: Any, renderTimeMs: Long) {
                 if (ttffMs == null) ttffMs = renderTimeMs - loadStartMs
+                loading = false
             }
         })
     }
 
     private fun tick() {
         diag = if (current != null) buildDiag() else ""
+        // Strumienie bez obrazu (radio): ekran ładowania znika, gdy gra dźwięk.
+        if (loading && player.playbackState == Player.STATE_READY && !player.currentTracks.isTypeSelected(C.TRACK_TYPE_VIDEO)) loading = false
         val url = current?.url
         if (url == null || error != null || !player.playWhenReady) { stuckTicks = 0; lastFrames = -1; return }
         val frames = player.videoDecoderCounters?.let { it.ensureUpdated(); it.renderedOutputBufferCount.toLong() } ?: -1L
@@ -273,6 +280,7 @@ class PlayerController(context: Context) {
     private fun load(url: String, mode: Int) {
         loadStartMs = SystemClock.elapsedRealtime()
         ttffMs = null; droppedFrames = 0
+        loading = true
         audioInfo = null
         attempt = mode
         tried += mode
@@ -315,6 +323,7 @@ class PlayerController(context: Context) {
         main.removeCallbacksAndMessages(null)
         player.stop()
         player.clearMediaItems()
+        loading = false
         current = null
         error = null
     }

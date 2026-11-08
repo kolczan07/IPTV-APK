@@ -208,6 +208,7 @@ private fun PreviewPane(controller: PlayerController, chProvider: () -> ChannelE
                 },
                 onRelease = { it.player = null },
             )
+            LoadingOverlay(controller.loading && controller.error == null, controller.current, Modifier.fillMaxSize(), small = true)
             controller.error?.let {
                 Text(it, modifier = Modifier.align(Alignment.Center).padding(8.dp),
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
