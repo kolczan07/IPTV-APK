@@ -6,6 +6,8 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import app.iptvtv.data.*
 import app.iptvtv.player.PlayerController
+import app.iptvtv.ui.AccentColor
+import app.iptvtv.ui.ThemeMode
 import app.iptvtv.update.UpdateState
 import app.iptvtv.update.Updater
 import kotlinx.coroutines.Dispatchers
@@ -40,13 +42,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val epgOffsetMin = settings.epgOffsetMin.stateIn(viewModelScope, SharingStarted.Eagerly, 0)
 
     val themeMode = settings.themeMode
-        .map { s -> app.iptvtv.ui.ThemeMode.entries.firstOrNull { it.name == s } ?: app.iptvtv.ui.ThemeMode.Dark }
-        .stateIn(viewModelScope, SharingStarted.Eagerly, app.iptvtv.ui.ThemeMode.Dark)
+        .map { s -> ThemeMode.entries.firstOrNull { it.name == s } ?: ThemeMode.Dark }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, ThemeMode.Dark)
     val accent = settings.accentIdx
-        .map { i -> app.iptvtv.ui.AccentColor.entries.getOrElse(i) { app.iptvtv.ui.AccentColor.Teal } }
-        .stateIn(viewModelScope, SharingStarted.Eagerly, app.iptvtv.ui.AccentColor.Teal)
-    fun setThemeMode(m: app.iptvtv.ui.ThemeMode) { viewModelScope.launch { settings.setThemeMode(m.name) } }
-    fun setAccent(a: app.iptvtv.ui.AccentColor) { viewModelScope.launch { settings.setAccentIdx(a.ordinal) } }
+        .map { i -> AccentColor.entries.getOrElse(i) { AccentColor.Teal } }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, AccentColor.Teal)
+    fun setThemeMode(m: ThemeMode) { viewModelScope.launch { settings.setThemeMode(m.name) } }
+    fun setAccent(a: AccentColor) { viewModelScope.launch { settings.setAccentIdx(a.ordinal) } }
 
     val showDiag = settings.showDiag.stateIn(viewModelScope, SharingStarted.Eagerly, false)
     fun setShowDiag(v: Boolean) { viewModelScope.launch { settings.setShowDiag(v) } }
