@@ -46,10 +46,6 @@ class PlayerController(context: Context) {
 
     // Tryb AUTO: ExoPlayer sam rozpoznaje kontener (+ flagi dla TS bez AUD/IDR).
     private val autoExtractors = DefaultExtractorsFactory()
-        .setTsExtractorFlags(
-            DefaultTsPayloadReaderFactory.FLAG_DETECT_ACCESS_UNITS or
-                DefaultTsPayloadReaderFactory.FLAG_ALLOW_NON_IDR_KEYFRAMES
-        )
 
     private val autoSourceFactory = DefaultMediaSourceFactory(
         context.applicationContext,
@@ -67,7 +63,6 @@ class PlayerController(context: Context) {
     // (Media3, API 31+ i Fire TV) potrafi zamrażać/psuć obraz przy działającym dźwięku na boxach
     // z układami Realtek/Amlogic; a gdy wybrany dekoder się nie uruchomi, próbujemy następnego.
     private val renderers = DefaultRenderersFactory(context.applicationContext)
-        .forceDisableMediaCodecAsynchronousQueueing()
         .setEnableDecoderFallback(true)
 
     // Tryb TS: wymuszony extractor MPEG-TS bez zgadywania formatu (strumienie z tunera Enigma2 :8001 to zawsze TS).
@@ -76,10 +71,7 @@ class PlayerController(context: Context) {
         http,
         ExtractorsFactory {
             arrayOf<Extractor>(
-                TsExtractor(
-                    DefaultTsPayloadReaderFactory.FLAG_DETECT_ACCESS_UNITS or
-                        DefaultTsPayloadReaderFactory.FLAG_ALLOW_NON_IDR_KEYFRAMES
-                )
+                TsExtractor(0)
             )
         }
     )
