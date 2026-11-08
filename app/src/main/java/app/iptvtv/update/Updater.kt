@@ -34,8 +34,11 @@ class Updater(
     private val currentVersion: String,
 ) {
     private val client = OkHttpClient.Builder()
-        .connectTimeout(15, TimeUnit.SECONDS)
-        .readTimeout(60, TimeUnit.SECONDS)
+        .connectTimeout(20, TimeUnit.SECONDS)
+        .readTimeout(120, TimeUnit.SECONDS)
+        // Część boxów/routerów/filtrów źle znosi HTTP/2 (objaw: 504 przy pobieraniu z GitHuba).
+        .protocols(listOf(okhttp3.Protocol.HTTP_1_1))
+        .retryOnConnectionFailure(true)
         .build()
 
     /** Zwraca informacje o nowszej wersji albo null, gdy nie ma nowszej. */
@@ -67,7 +70,21 @@ class Updater(
         }
     }
 
-    suspend fun download(info: UpdateInfo, onProgress: (Float) -> Unit): File = withContext(Dispatchers.IO) {
+    /** Pobiera APK; do 3 prób z przerwą (chwilowe 5xx / zerwane połączenie). */
+    suspend fun download(info: UpdateInfo, onProgress: (Float) -> Unit): File {
+        var last: Exception? = null
+        repeat(3) { attempt ->
+            try {
+                return downloadOnce(info, onProgress)
+            } catch (e: IOException) {
+                last = e
+                kotlinx.coroutines.delay(1500L * (attempt + 1))
+            }
+        }
+        throw last ?: IOException("nieznany błąd")
+    }
+
+    private suspend fun downloadOnce(info: UpdateInfo, onProgress: (Float) -> Unit): File = withContext(Dispatchers.IO) {
         val dir = File(ctx.cacheDir, "updates").apply {
             mkdirs()
             listFiles()?.forEach { it.delete() }
