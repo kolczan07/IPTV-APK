@@ -8,6 +8,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.BufferedInputStream
 import java.io.IOException
+import java.io.InputStream
 import java.util.concurrent.TimeUnit
 import java.util.zip.GZIPInputStream
 
@@ -17,6 +18,7 @@ private const val HOUR = 3_600_000L
 private const val OFFSET_MARGIN = 12 * HOUR
 
 class ChannelRepository(
+    private val ctx: android.content.Context,
     private val dao: ChannelDao,
     private val epg: EpgDao,
     private val history: HistoryDao,
@@ -38,6 +40,19 @@ class ChannelRepository(
         return b.build()
     }
 
+    /** Otwiera źródło: plik wybrany z menedżera plików (content://) albo adres HTTP(S). */
+    private fun <T> withStream(url: String, block: (InputStream) -> T): T {
+        if (url.startsWith("content://")) {
+            val s = ctx.contentResolver.openInputStream(android.net.Uri.parse(url))
+                ?: throw IOException("Nie można otworzyć pliku")
+            return s.use(block)
+        }
+        return client.newCall(requestFor(url)).execute().use { resp ->
+            if (!resp.isSuccessful) throw IOException("HTTP ${resp.code}")
+            block(resp.body!!.byteStream())
+        }
+    }
+
     suspend fun markWatched(url: String) = history.mark(url, System.currentTimeMillis())
     suspend fun clearHistory() = history.clear()
 
@@ -45,10 +60,8 @@ class ChannelRepository(
 
     /** Pobiera M3U i podmienia kanały w bazie. Zwraca liczbę kanałów. */
     suspend fun refresh(url: String): Int = withContext(Dispatchers.IO) {
-        val request = requestFor(url)
-        val parsed = client.newCall(request).execute().use { resp ->
-            if (!resp.isSuccessful) throw IOException("HTTP ${resp.code}")
-            resp.body!!.byteStream().bufferedReader().useLines { M3uParser.parse(it) }
+        val parsed = withStream(url) { input ->
+            input.bufferedReader().useLines { M3uParser.parse(it) }
         }
         if (parsed.isEmpty()) throw IOException("Playlista jest pusta")
         dao.replaceAll(parsed.mapIndexed { i, c ->
@@ -63,10 +76,8 @@ class ChannelRepository(
     /** Pobiera XMLTV (także .gz) i zapisuje programy z okna -14 h … +48 h (zapas na korektę czasu). Zwraca liczbę programów. */
     suspend fun refreshEpg(url: String, localTime: Boolean = false): Int = withContext(Dispatchers.IO) {
         val now = System.currentTimeMillis()
-        val request = requestFor(url)
-        val items = client.newCall(request).execute().use { resp ->
-            if (!resp.isSuccessful) throw IOException("HTTP ${resp.code}")
-            val raw = BufferedInputStream(resp.body!!.byteStream())
+        val items = withStream(url) { input ->
+            val raw = BufferedInputStream(input)
             raw.mark(2)
             val b0 = raw.read()
             val b1 = raw.read()

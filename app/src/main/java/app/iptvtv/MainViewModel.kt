@@ -26,7 +26,7 @@ const val EPG_OFFSET_STEP_MIN = 30
 
 class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val db = AppDb.get(app)
-    private val repo = ChannelRepository(db.channelDao(), db.epgDao(), db.historyDao())
+    private val repo = ChannelRepository(app, db.channelDao(), db.epgDao(), db.historyDao())
     private val settings = SettingsStore(app)
 
     val controller = PlayerController(app)

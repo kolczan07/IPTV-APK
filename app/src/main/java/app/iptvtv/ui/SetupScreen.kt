@@ -1,6 +1,8 @@
 package app.iptvtv.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -24,6 +26,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.ImeAction
@@ -229,8 +232,10 @@ private fun AccountSection(
         if (!isDefault) {
             UrlField("Nazwa konta", name, { name = it }, keyboardType = KeyboardType.Text, placeholder = "np. Dom, Działka")
         }
-        UrlField("Adres playlisty M3U", m3u, { m3u = it })
-        UrlField("Adres EPG (XMLTV, także .xml.gz), opcjonalnie", epg, { epg = it })
+        val pickM3u = rememberFilePicker { m3u = it }
+        val pickEpg = rememberFilePicker { epg = it }
+        UrlField("Adres playlisty M3U lub plik", m3u, { m3u = it }, onPickFile = pickM3u)
+        UrlField("Adres EPG (XMLTV, także .xml.gz) lub plik, opcjonalnie", epg, { epg = it }, onPickFile = pickEpg)
 
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text("Strefa czasowa EPG", style = MaterialTheme.typography.labelLarge)
@@ -402,11 +407,15 @@ private fun UrlField(
     onChange: (String) -> Unit,
     keyboardType: KeyboardType = KeyboardType.Uri,
     placeholder: String = "Kliknij, aby wpisać",
+    onPickFile: (() -> Unit)? = null,
 ) {
     // Pole tekstowe (i klawiatura) pojawia się dopiero po kliknięciu wiersza; najechanie kursorem nic nie otwiera.
     var editing by remember { mutableStateOf(false) }
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text(label, style = MaterialTheme.typography.labelLarge)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(label, style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(1f))
+            if (onPickFile != null) Button(onClick = onPickFile) { Text("Wybierz plik…") }
+        }
         if (!editing) {
             Card(
                 onClick = { editing = true },
@@ -422,7 +431,12 @@ private fun UrlField(
                 ),
             ) {
                 Text(
-                    value.ifBlank { placeholder },
+                    when {
+                        value.isBlank() -> placeholder
+                        value.startsWith("content://") ->
+                            "Plik: " + (android.net.Uri.parse(value).lastPathSegment?.substringAfterLast('/') ?: value)
+                        else -> value
+                    },
                     modifier = Modifier.padding(16.dp),
                     maxLines = 1, overflow = TextOverflow.Ellipsis,
                     style = TextStyle(fontSize = 20.sp),
@@ -456,4 +470,20 @@ private fun UrlField(
             }
         }
     }
+}
+
+/** Wybór pliku z menedżera plików; zwraca adres content:// z trwałym dostępem do odczytu (przetrwa restart). */
+@Composable
+private fun rememberFilePicker(onPicked: (String) -> Unit): () -> Unit {
+    val ctx = LocalContext.current
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            runCatching {
+                ctx.contentResolver.takePersistableUriPermission(uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            onPicked(uri.toString())
+        }
+    }
+    // Na części dekoderów/TV nie ma menedżera plików systemu; wtedy po prostu nic się nie dzieje.
+    return { runCatching { launcher.launch(arrayOf("*/*")) } }
 }
