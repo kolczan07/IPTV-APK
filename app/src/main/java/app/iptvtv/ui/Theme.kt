@@ -1,7 +1,9 @@
 package app.iptvtv.ui
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.graphics.Color
+import androidx.tv.material3.LocalContentColor
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.darkColorScheme
 
@@ -20,6 +22,9 @@ fun IptvTheme(content: @Composable () -> Unit) {
             surface = Panel, onSurface = Color(0xFFE8EEF2),
             surfaceVariant = PanelHi, onSurfaceVariant = Color(0xFF9FB0BB),
         ),
-        content = content,
+        content = {
+            // Teksty bez jawnego koloru (nagłówki, etykiety pól) dostawały czarny kolor na ciemnym tle.
+            CompositionLocalProvider(LocalContentColor provides Color(0xFFF2F6F8), content = content)
+        },
     )
 }
