@@ -1,7 +1,7 @@
 package app.iptvtv.ui
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
@@ -29,6 +29,7 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.isSpecified
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.onPreviewKeyEvent
@@ -41,21 +42,19 @@ import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.unit.IntOffset
+import android.view.LayoutInflater
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.util.lerp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.media3.ui.PlayerView
 import androidx.tv.material3.*
+import app.iptvtv.R
 import app.iptvtv.data.ChannelEntity
 import app.iptvtv.data.EpgSnapshot
 import app.iptvtv.player.PlayerController
 import coil.compose.AsyncImage
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
-import kotlin.math.roundToInt
 
 private const val ALL = "Wszystkie"
 private const val FAV = "★ Ulubione"
@@ -65,8 +64,10 @@ private const val COMPACT_DP = 720
 /** Podgląd w miniTV startuje dopiero po tylu ms od zatrzymania kursora na kanale (przewijanie nie przestraja tunera). */
 private const val PREVIEW_DELAY_MS = 1750L
 
-/** Po tylu ms bez ruchu kursora (fokus, pilot, mysz, dotyk) miniTV rozwija się na pełny ekran. */
-private const val IDLE_FULLSCREEN_MS = 4000L
+/** Po tylu ms (5 s) bez ruchu kursora (fokus, pilot, mysz, dotyk) miniTV rozwija się na pełny ekran. */
+private val SmoothEasing = CubicBezierEasing(0.22f, 1f, 0.36f, 1f)
+
+private const val IDLE_FULLSCREEN_MS = 5000L
 
 /** Współdzielone (bez rekompozycji) informacje o miniTV: widok odtwarzacza i jego położenie w oknie. */
 private class PreviewHolder {
@@ -142,7 +143,7 @@ fun ChannelListScreen(
         }
     }
 
-    // --- miniTV na pełny ekran po 4 s bez ruchu kursora ---
+    // --- miniTV na pełny ekran po 5 s bez ruchu kursora ---
     var idleTick by remember { mutableIntStateOf(0) }
     var fullscreen by remember { mutableStateOf(false) }
     val holder = remember { PreviewHolder() }
@@ -159,7 +160,7 @@ fun ChannelListScreen(
     BackHandler(enabled = fullscreen) { fullscreen = false; idleTick++ }
     val progress by animateFloatAsState(
         targetValue = if (fullscreen) 1f else 0f,
-        animationSpec = tween(if (fullscreen) 650 else 380, easing = FastOutSlowInEasing),
+        animationSpec = tween(if (fullscreen) 800 else 450, easing = SmoothEasing),
         label = "miniTvFullscreen",
     )
 
@@ -365,13 +366,14 @@ private fun PreviewPane(controller: PlayerController, holder: PreviewHolder, chP
     }
 }
 
+private fun lerp1(a: Float, b: Float, t: Float) = a + (b - a) * t
+
 /**
  * miniTV rozwijane na cały ekran: obraz rośnie płynnie z pozycji podglądu, reszta ekranu zanika do czerni,
  * a na końcu wjeżdża pasek z nazwą kanału i bieżącym programem. [progress] 0 = miniTV, 1 = pełny ekran.
  */
 @Composable
 private fun FullscreenPreview(progress: Float, controller: PlayerController, holder: PreviewHolder, epg: EpgSnapshot) {
-    val density = LocalDensity.current
     // Ten sam odtwarzacz ma jedną powierzchnię wideo: po zwinięciu oddajemy ją widokowi w podglądzie.
     DisposableEffect(Unit) {
         onDispose {
@@ -385,23 +387,25 @@ private fun FullscreenPreview(progress: Float, controller: PlayerController, hol
             if (it.width > 1f && it.height > 1f) it
             else Rect(fullW * 0.4f, fullH * 0.4f, fullW * 0.6f, fullH * 0.6f)
         }
-        val left = lerp(mini.left, 0f, progress)
-        val top = lerp(mini.top, 0f, progress)
-        val w = lerp(mini.width, fullW, progress)
-        val h = lerp(mini.height, fullH, progress)
+        // Obraz ma stały rozmiar pełnoekranowy; animujemy tylko transformację na GPU (bez relayoutu = płynnie).
+        val sx = lerp1(mini.width / fullW, 1f, progress)
+        val sy = lerp1(mini.height / fullH, 1f, progress)
+        val tx = lerp1(mini.left, 0f, progress)
+        val ty = lerp1(mini.top, 0f, progress)
 
         Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = progress)))
         Box(
-            Modifier
-                .offset { IntOffset(left.roundToInt(), top.roundToInt()) }
-                .size(with(density) { w.toDp() }, with(density) { h.toDp() })
+            Modifier.fillMaxSize()
+                .graphicsLayer {
+                    transformOrigin = TransformOrigin(0f, 0f)
+                    scaleX = sx; scaleY = sy; translationX = tx; translationY = ty
+                }
                 .background(Color.Black),
         ) {
             AndroidView(
                 modifier = Modifier.fillMaxSize(),
                 factory = { ctx ->
-                    PlayerView(ctx).apply {
-                        useController = false
+                    (LayoutInflater.from(ctx).inflate(R.layout.player_view_texture, null, false) as PlayerView).apply {
                         isFocusable = false
                         setKeepContentOnPlayerReset(true)
                         setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)
@@ -415,7 +419,11 @@ private fun FullscreenPreview(progress: Float, controller: PlayerController, hol
 
         // pasek informacyjny wjeżdża dopiero, gdy obraz prawie wypełni ekran
         val ch = controller.current
-        val a = ((progress - 0.6f) / 0.4f).coerceIn(0f, 1f)
+        // pasek gaśnie 3 s po otwarciu pełnego ekranu i po każdym przełączeniu kanału
+        var infoOn by remember { mutableStateOf(true) }
+        LaunchedEffect(ch?.url) { infoOn = true; delay(3000); infoOn = false }
+        val infoAlpha by animateFloatAsState(if (infoOn) 1f else 0f, tween(500), label = "miniTvInfo")
+        val a = minOf(((progress - 0.6f) / 0.4f).coerceIn(0f, 1f), infoAlpha)
         if (ch != null && a > 0f) {
             val (cur, _) = epg.nowNext(ch)
             Row(
