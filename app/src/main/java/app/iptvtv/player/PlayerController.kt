@@ -18,6 +18,10 @@ import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.datasource.HttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
+import androidx.media3.exoplayer.Renderer
+import androidx.media3.exoplayer.audio.AudioRendererEventListener
+import androidx.media3.exoplayer.audio.AudioSink
+import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
 import androidx.media3.exoplayer.analytics.AnalyticsListener
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
@@ -29,6 +33,7 @@ import androidx.media3.extractor.ts.DefaultTsPayloadReaderFactory
 import androidx.media3.extractor.ts.PsExtractor
 import androidx.media3.extractor.ts.TsExtractor
 import app.iptvtv.data.ChannelEntity
+import io.github.anilbeesetti.nextlib.media3ext.ffdecoder.FfmpegAudioRenderer
 
 /**
  * Jeden współdzielony ExoPlayer dla podglądu na liście i pełnego ekranu.
@@ -63,8 +68,27 @@ class PlayerController(context: Context) {
     // Dekodowanie: synchroniczna kolejka MediaCodec + zapasowy dekoder. Domyślna asynchroniczna kolejka
     // (Media3, API 31+ i Fire TV) potrafi zamrażać/psuć obraz przy działającym dźwięku na boxach
     // z układami Realtek/Amlogic; a gdy wybrany dekoder się nie uruchomi, próbujemy następnego.
-    private val renderers = DefaultRenderersFactory(context.applicationContext)
-        .setEnableDecoderFallback(true)
+    // Na końcu listy dochodzi programowy dekoder audio FFmpeg: używany tylko dla formatów, których sprzętowy
+    // MediaCodec nie obsługuje (głównie MP2 z Enigmy2, którego telefony zwykle nie dekodują - był obraz bez dźwięku).
+    // Wideo zostaje wyłącznie na MediaCodec.
+    private val renderers = object : DefaultRenderersFactory(context.applicationContext) {
+        override fun buildAudioRenderers(
+            context: Context,
+            extensionRendererMode: Int,
+            mediaCodecSelector: MediaCodecSelector,
+            enableDecoderFallback: Boolean,
+            audioSink: AudioSink,
+            eventHandler: Handler,
+            eventListener: AudioRendererEventListener,
+            out: ArrayList<Renderer>,
+        ) {
+            super.buildAudioRenderers(
+                context, extensionRendererMode, mediaCodecSelector, enableDecoderFallback,
+                audioSink, eventHandler, eventListener, out
+            )
+            out.add(FfmpegAudioRenderer(eventHandler, eventListener, audioSink))
+        }
+    }.setEnableDecoderFallback(true)
 
     // Tryb TS: wymuszony extractor MPEG-TS bez zgadywania formatu (strumienie z tunera Enigma2 :8001 to zawsze TS).
     // Pomija rozpoznawanie, które przy dopiero strojonym tunerze potrafiło zawieść i uruchamiać kolejne próby.

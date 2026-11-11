@@ -63,10 +63,13 @@ dependencies {
     implementation("androidx.compose.foundation:foundation")
     implementation("androidx.tv:tv-material:1.0.0")
 
-    val media3 = "1.5.1"
+    val media3 = "1.7.1"
     implementation("androidx.media3:media3-exoplayer:$media3")
     implementation("androidx.media3:media3-exoplayer-hls:$media3")
     implementation("androidx.media3:media3-ui:$media3")
+    // Programowy dekoder FFmpeg (m.in. MP2 z Enigmy2) - telefony zwykle nie mają sprzętowego dekodera MP2.
+    // Wersja musi pasować do media3 (1.7.1-0.9.0 = media3 1.7.1).
+    implementation("io.github.anilbeesetti:nextlib-media3ext:1.7.1-0.9.0")
 
     val room = "2.6.1"
     implementation("androidx.room:room-runtime:$room")
